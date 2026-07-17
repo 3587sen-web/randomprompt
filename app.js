@@ -1262,6 +1262,7 @@ const STORAGE_PREFIX = "aura_pg_";
 
 // Modal Promises Resolvers
 let modalResolver = null;
+let modalHideTimeout = null;  // tracks the 250ms hide timer to prevent race conditions
 let draggedCard = null;
 
 // Initialize Elements
@@ -2837,6 +2838,12 @@ function showToast(message, type = "info") {
 
 function showCustomConfirm(title, message, isDanger = false) {
   return new Promise((resolve) => {
+    // Cancel any pending hide timer from the previous dialog (fixes race condition)
+    if (modalHideTimeout) {
+      clearTimeout(modalHideTimeout);
+      modalHideTimeout = null;
+    }
+    
     modalResolver = resolve;
     
     elements.modalTitle.textContent = title;
@@ -2864,6 +2871,12 @@ function showCustomConfirm(title, message, isDanger = false) {
 
 function showCustomPrompt(title, message, defaultValue = "") {
   return new Promise((resolve) => {
+    // Cancel any pending hide timer from the previous dialog (fixes race condition)
+    if (modalHideTimeout) {
+      clearTimeout(modalHideTimeout);
+      modalHideTimeout = null;
+    }
+    
     modalResolver = resolve;
     
     elements.modalTitle.textContent = title;
@@ -2891,8 +2904,10 @@ function closeModal(approved) {
   const modal = elements.customModal;
   modal.classList.remove("active");
   
-  setTimeout(() => {
+  // Store timeout ID so it can be cancelled if a new dialog opens immediately
+  modalHideTimeout = setTimeout(() => {
     modal.style.display = "none";
+    modalHideTimeout = null;
   }, 250);
   
   if (modalResolver) {
