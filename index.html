@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>極光隨機提示詞產生器 | Aura Prompt Generator</title>
+  <!-- Google Fonts Outfit & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Background gradients -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-logo">
+        <span class="logo-icon">✨</span>
+        <div class="logo-text">
+          <h1>極光提示詞產生器</h1>
+          <p>Aura Prompt Generator</p>
+        </div>
+      </div>
+      <div class="header-controls">
+        <!-- Column Count Controller -->
+        <div class="ctrl-group">
+          <label for="colCountInput">欄位數量</label>
+          <div class="number-stepper">
+            <button type="button" class="step-btn" id="decColCount">-</button>
+            <input type="number" id="colCountInput" min="2" max="99" value="12">
+            <button type="button" class="step-btn" id="incColCount">+</button>
+          </div>
+        </div>
+
+        
+        <!-- Quick Actions -->
+        <div class="action-buttons">
+          <button class="btn btn-primary" id="btnPrefill" title="填入預置常用提示詞">填入預設</button>
+          <button class="btn btn-secondary" id="btnAddNewCol" title="新增一個新欄位">+ 新增欄位</button>
+          <button class="btn btn-danger" id="btnEmptyContent" title="清空所有欄位內容">清空內容</button>
+          <button class="btn btn-danger" id="btnClearTitles" title="清空所有欄位標題">清空標題</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Top Settings and Presets -->
+    <section class="control-panel glass">
+      <!-- Inner row: Global Controls + Presets -->
+      <div class="control-panel-inner">
+        <!-- Global Controls -->
+        <div class="global-settings">
+          <h3>全域設定</h3>
+          <div class="toggle-grid">
+            <label class="switch-container">
+              <span class="switch-label">包含欄位標題</span>
+              <input type="checkbox" id="toggleTitles" checked>
+              <span class="switch-slider"></span>
+            </label>
+            <label class="switch-container">
+              <span class="switch-label">逗號分隔模式</span>
+              <input type="checkbox" id="toggleComma" checked>
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Presets Management -->
+        <div class="preset-manager">
+          <h3>設定檔管理</h3>
+          <div class="preset-controls">
+            <div class="select-wrapper">
+              <select id="presetSelect">
+                <option value="">選擇設定檔...</option>
+              </select>
+            </div>
+            <div class="preset-actions">
+              <button class="btn btn-preset load" id="btnLoadPreset" title="載入選取的設定檔">📂 載入</button>
+              <button class="btn btn-preset save" id="btnSavePreset" title="儲存當前內容至設定檔">💾 儲存</button>
+              <button class="btn btn-preset export" id="btnExportPresets" title="匯出所有設定檔至 JSON 檔案">⬇️ 匯出</button>
+              <button class="btn btn-preset import" id="btnImportPresetsTrigger" title="從 JSON 檔案匯入設定檔">⬆️ 匯入</button>
+              <button class="btn btn-preset delete btn-danger" id="btnDeletePreset" title="刪除選取的設定檔">🗑️ 刪除</button>
+            </div>
+            <input type="file" id="importFileInput" accept=".json" style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Portable Pack Section -->
+      <div class="portable-section">
+        <h3>便攜包 <span class="portable-badge">跨裝置同步</span></h3>
+        <p class="portable-desc">將所有欄位資料、設定檔、固定標籤一鍵打包下載，可在另一台電腦上完整還原。</p>
+        <div class="portable-actions">
+          <button class="btn-portable" id="btnExportPortable" title="匯出所有資料為便攜包">📦 匯出便攜包</button>
+          <button class="btn-portable restore" id="btnImportPortableTrigger" title="從便攜包還原所有資料">📥 還原便攜包</button>
+        </div>
+        <input type="file" id="portableFileInput" accept=".json" style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
+      </div>
+    </section>
+
+    <!-- Dynamic Columns Grid -->
+    <main class="columns-section">
+      <div class="section-header">
+        <h2>提示詞欄位區</h2>
+        <span class="badge" id="activeColsBadge">0 個啟用</span>
+      </div>
+      <div class="columns-grid" id="columnsGrid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </main>
+
+    <!-- Always Add Tags Section -->
+    <section class="always-tags-section glass">
+      <div class="always-header">
+        <div class="always-title">
+          <h2>固定附加標籤</h2>
+          <p>產生的提示詞中會必定夾帶的字詞</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btnAddAlwaysTag">+ 新增固定標籤組</button>
+      </div>
+      <div class="always-tags-grid" id="alwaysTagsGrid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </section>
+
+    <!-- Output and Action Area -->
+    <section class="output-section glass">
+      <div class="output-header">
+        <h2>生成的提示詞結果</h2>
+        <div class="output-actions">
+          <!-- Generate Count Controller -->
+          <div class="ctrl-group">
+            <label for="genCountInput">生成數量</label>
+            <div class="number-stepper">
+              <button type="button" class="step-btn" id="decGenCount">-</button>
+              <input type="number" id="genCountInput" min="1" max="99" value="1">
+              <button type="button" class="step-btn" id="incGenCount">+</button>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-lg" id="btnGenerate">🔮 隨機生成</button>
+          <button class="btn btn-secondary btn-lg" id="btnCopyText" title="複製全部提示詞">📋 複製全部</button>
+          <button class="btn btn-secondary btn-lg" id="btnCopyJson" title="複製 JSON 格式">🧩 複製 JSON</button>
+        </div>
+      </div>
+      <div class="outputs-grid" id="outputsGrid">
+        <div class="output-card">
+          <div class="output-box-container">
+            <div class="output-box" id="outputBox">
+              在上方欄位輸入內容 → 點選「隨機生成」 → 從每個啟用欄位中隨機抽選一行組合出您的完美 Prompt！
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Custom Dialog Modal (Replaces browser default prompt/confirm) -->
+  <div class="modal-overlay" id="customModal">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3 id="modalTitle">對話視窗</h3>
+        <button class="modal-close" id="modalCloseX">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="modalMessage">這裡顯示提示內容。</p>
+        <input type="text" id="modalInput" class="modal-input" placeholder="請輸入...">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="modalCancelBtn">取消</button>
+        <button class="btn btn-primary" id="modalConfirmBtn">確認</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast System Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

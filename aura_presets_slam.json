@@ -1,0 +1,325 @@
+{
+  "17種變數捏臉(NBA版)": {
+    "columnCount": 17,
+    "columns": [
+      {
+        "title": "Background ",
+        "content": "pure white background\npure black background\nlight gray background\ndark gray background\nbeige background\ncream background\nivory background\nlight pink background\nhot pink background\nred background\norange background\nyellow background\nlight blue background\ndark blue background\nnavy background\nlight green background\ndark green background\npurple background\nbrown background\nskin tone background\nwhite to gray gradient background\npink to purple gradient background\nblue to purple gradient background\norange to pink gradient background\nblue to cyan gradient background\nyellow to orange gradient background\nblack to dark gray gradient background\npastel gradient background\nneon gradient background\nsunset gradient background\nbusy street background\nempty street background\nneon street at night background\nTokyo street background\nNew York street background\nalley street background\ngraffiti wall street background\nrainy street background\nstreet market background\nstreet with cars background\nliving room background\nbedroom background\noffice background\ncafe background\nlibrary background\nstudio background\nkitchen background\nbathroom background\nclassroom background\nhospital background\nbasketball court background\nfootball field background\nsoccer field background\ntennis court background\nbaseball field background\ngym background\nfitness gym background\nboxing ring background\nswimming pool background\nrunning track background\nskate park background\nyoga studio background\nvolleyball court background\nbadminton court background\ngolf course background\nbowling alley background\nclimbing gym background\nwrestling mat background\nstadium background\nplayground background",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "年齡性別",
+        "content": "baby\ntoddler\nchild\nyoung child\npreteen\nteenager\n16 year old\n18 year old\n20 year old\nyoung adult\n25 year old\n30 year old\n35 year old\n40 year old\nmiddle aged\n50 year old\nelderly\n60 year old\n70 year old\n80 year old\nold man\nold woman\nyoung man\nyoung woman\nmale\nfemale\nandrogynous\nmasculine features\nfeminine features\nboyish look\ngirlish look\nmature male\nmature female\nyouthful male\nyouthful female\nnon-binary appearance\ntransgender appearance\nbaby face\naged face\nteen boy\nteen girl\nadult man\nadult woman\nsenior man\nsenior woman\nchildlike face\nmature face\nageless face\ngender neutral face\nstrong masculine jaw\nsoft feminine face",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "頭部姿態與視線",
+        "content": "front facing\nprofile view left\nprofile view right\nthree quarter view left\nthree quarter view right\nlooking straight at camera\nlooking away from camera\nlooking up\nlooking down\nlooking to the left\nlooking to the right\nhead tilted left\nhead tilted right\nchin up\nchin down\nhead turned over shoulder\neyes closed looking down\nhead leaning forward\nhead leaning backward\ndirect eye contact",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "臉型",
+        "content": "square face\nround face\nlong face\noval face\nheart face\ndiamond face\ninverted triangle face\ntriangle face\npear face\ntrapezoid face\ninverted trapezoid face\npentagon face\nhexagon face\noctagon face\nrectangle face\nwide square face\nnarrow rectangle face\nsoft square face\noblong face\nV-shaped face\nU-shaped face\nH-shaped face\nO-shaped face\nA-shaped face\nX-shaped face\negg-shaped face\napple-shaped face\npapaya-shaped face\ncantaloupe face\nmelon seed face\nshield face\nmaple leaf face\npetal face\nteardrop face\naxe-shaped face\nboot-shaped face\ngourd-shaped face\nbell-shaped face\nchiseled face\nslim face\nchubby face\nangular face\nsoft round face\ndefined jawline face\ntapered face\nwide cheekbone face\nnarrow chin face\nhigh forehead face\nflat face\ncontoured face",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "髮型",
+        "content": "bald\nbuzz cut\ncrew cut\nshort hair\nmedium hair\nlong hair\nvery long hair\nbob cut\nlob cut\npixie cut\nafro\ncurly hair\nwavy hair\nstraight hair\ncoily hair\nkinky hair\ndreadlocks\nbraids\ncornrows\nponytail\nhigh ponytail\nlow ponytail\nbun\nmessy bun\ntop knot\npigtails\ntwo braids\nside part\nmiddle part\nno part\nbangs\ncurtain bangs\nblunt bangs\nwispy bangs\nundercut\nfade haircut\nmohawk\nmullet\nslicked back hair\nwet hair\nmessy hair\nneat hair\nvoluminous hair\nflat hair\ndyed blonde hair\ndyed black hair\ndyed red hair\ndyed blue hair\ndyed pink hair\ngrey hair",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "眉毛",
+        "content": "thick eyebrows\nthin eyebrows\nbushy eyebrows\nsparse eyebrows\narched eyebrows\nstraight eyebrows\ncurved eyebrows\nangled eyebrows\nflat eyebrows\nrounded eyebrows\nS-shaped eyebrows\nhigh arched eyebrows\nlow arched eyebrows\nsoft arched eyebrows\nsharp arched eyebrows\ntapered eyebrows\nblunt eyebrows\nshort eyebrows\nlong eyebrows\nwide eyebrows\nnarrow eyebrows\ngroomed eyebrows\nmessy eyebrows\nfeathered eyebrows\nnatural eyebrows\nbleached eyebrows\ndyed eyebrows\nombre eyebrows\nfaded eyebrows\ndefined eyebrows\nsoft eyebrows\nbold eyebrows\nlight eyebrows\ndark eyebrows\nblack eyebrows\nbrown eyebrows\nblonde eyebrows\nred eyebrows\ngrey eyebrows\nwhite eyebrows\nunibrow\nsplit eyebrows\nscarred eyebrows\nshaved eyebrow slit\nupward eyebrows\ndownward eyebrows\nclose set eyebrows\nwide set eyebrows\ncaterpillar eyebrows\nno eyebrows",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "眼睛",
+        "content": "almond eyes\nround eyes\nupturned eyes\ndownturned eyes\nmonolid eyes\ndouble eyelid eyes\nhooded eyes\ndeep set eyes\nwide set eyes\nclose set eyes\nprotruding eyes\nsmall eyes\nbig eyes\nnarrow eyes\nslanted eyes\ncat eyes\nfox eyes\ndoe eyes\ndroopy eyes\nsleepy eyes\nsharp eyes\nsoft eyes\nsparkling eyes\nglassy eyes\nsanpaku eyes\nphoenix eyes\npeach blossom eyes\ncrossed eyes\nasymmetrical eyes\none eye closed\nwinking eye\nsquinting eyes\nclosed eyes\nhalf closed eyes\nwide open eyes\nbright eyes\ntired eyes\nred eyes\nblue eyes\nbrown eyes\ngreen eyes\nhazel eyes\ngray eyes\namber eyes\nblack eyes\nheterochromia eyes\nlight eyes\ndark eyes\nglowing eyes",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "鼻子",
+        "content": "roman nose\ngreek nose\nnubian nose\naquiline nose\nhawk nose\nsnub nose\nbutton nose\nupturned nose\ndownturned nose\nstraight nose\ncrooked nose\nwide nose\nnarrow nose\nlong nose\nshort nose\nbulbous nose\npointed nose\nflat nose\nfleshy nose\nbony nose\nhooked nose\ncelestial nose\nski slope nose\nrounded nose tip\nsharp nose tip\nsquare nose tip\ndroopy nose tip\nhigh nose bridge\nlow nose bridge\nwide nose bridge\nnarrow nose bridge\narched nose bridge\ncurved nose bridge\nbroken nose bridge\nflared nostrils\nnarrow nostrils\npinched nostrils\nasymmetrical nostrils\nthick nose\nthin nose\nlarge nose\nsmall nose\nprominent nose\ndelicate nose\nangular nose\nsoft nose\nrefined nose\nrugged nose\nethnic nose\npig nose",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "嘴巴",
+        "content": "thin lips\nfull lips\nthick lips\nplump lips\npouty lips\nwide mouth\nsmall mouth\nlarge mouth\nnarrow mouth\nheart shaped lips\nbow shaped lips\ncupid's bow lips\nM-shaped lips\ncherry lips\nrosebud lips\nbee stung lips\nglossy lips\nmatte lips\ndry lips\ncracked lips\nsmiling mouth\ngrinning mouth\ndownturned mouth\nneutral mouth\nparted lips\nclosed mouth\nopen mouth\nasymmetrical lips\nupper lip thicker\nlower lip thicker\neven lips\noverlined lips\ndefined lip line\nblurred lip line\nsharp lip corners\nsoft lip corners\nupturned lip corners\ndownturned lip corners\nthin upper lip\nthin lower lip\nfull upper lip\nfull lower lip\nflat lips\ncurved lips\nduck lips\nsensual lips\nyouthful lips\naged lips\nnatural lips\nexaggerated lips",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "臉部毛髮",
+        "content": "clean shaven\nstubble\nlight stubble\nheavy stubble\n5 o'clock shadow\ndesigner stubble\ngoatee\ncircle beard\nanchor beard\nsoul patch\nchin strap beard\nchin curtain beard\nfull beard\nshort beard\nmedium beard\nlong beard\nbushy beard\ntrimmed beard\nshaped beard\nfaded beard\npatchy beard\nthick beard\nthin beard\nmustache\nhandlebar mustache\npencil mustache\nchevron mustache\nhorseshoe mustache\nwalrus mustache\nfu manchu mustache\ndali mustache\ntoothbrush mustache\nenglish mustache\nlampshade mustache\npainter's brush mustache\nsideburns\nshort sideburns\nlong sideburns\nmutton chops\nfriendly mutton chops\npeach fuzz\nsparse facial hair\nthick facial hair\ncurly beard\nstraight beard\nwavy beard\ngrey beard\nsalt and pepper beard\nblonde beard\ndyed beard",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "膚色質感",
+        "content": "fair skin\nvery fair skin\npale skin\nlight skin\nmedium light skin\nolive skin\ntan skin\nmedium tan skin\ndark tan skin\nbrown skin\ndark brown skin\nvery dark skin\nblack skin\nporcelain skin\nivory skin\nbeige skin\ncaramel skin\nbronze skin\nebony skin\nyellow undertone skin\npink undertone skin\nneutral undertone skin\nwarm undertone skin\ncool undertone skin\nsmooth skin\ntextured skin\nporous skin\nglowing skin\noily skin\ndry skin\nmatte skin\ndewy skin\nfreckled skin\nclear skin\nacne skin\nscarred skin\nwrinkled skin\naged skin\nyouthful skin\nsunburned skin\nsun damaged skin\nvitiligo skin\nrosy cheeks\nflushed skin\npale complexion\nsweaty skin\nwet skin\npowdery skin\nnatural skin texture",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "表情",
+        "content": "neutral expression\nsmiling\nbig smile\nsubtle smile\nsmirking\ngrinning\nlaughing\nchuckling\nfrowning\nscowling\npouting\npursed lips\nraised eyebrow\nboth eyebrows raised\nfurrowed brows\nangry expression\nsad expression\ncrying\ntears in eyes\nhappy expression\nexcited expression\nsurprised expression\nshocked expression\nconfused expression\ndisgusted expression\nfearful expression\nworried expression\nnervous expression\ncalm expression\nserious expression\nstern expression\nthoughtful expression\ncontemplative expression\nbored expression\ntired expression\nsleepy expression\nyawning\nwinking\nsquinting\nglaring\nstaring intensely\nseductive expression\nflirty expression\nsmug expression\narrogant expression\nshy expression\nembarrassed expression\nproud expression\ndetermined expression\nblank expression",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "NBA球隊",
+        "content": "Atlanta Hawks\nBoston Celtics\nBrooklyn Nets\nCharlotte Hornets\nChicago Bulls\nCleveland Cavaliers\nDallas Mavericks\nDenver Nuggets\nDetroit Pistons\nGolden State Warriors\nHouston Rockets\nIndiana Pacers\nLos Angeles Clippers\nLos Angeles Lakers\nMemphis Grizzlies\nMiami Heat\nMilwaukee Bucks\nMinnesota Timberwolves\nNew Orleans Pelicans\nNew York Knicks\nOklahoma City Thunder\nOrlando Magic\nPhiladelphia 76ers\nPhoenix Suns\nPortland Trail Blazers\nSacramento Kings\nSan Antonio Spurs\nToronto Raptors\nUtah Jazz\nWashington Wizards\nSeattle SuperSonics\nWashington Bullets\nBaltimore Bullets\nCapital Bullets\nChicago Zephyrs\nChicago Packers\nBaltimore Bullets (Original)\nWashington Capitols\nCharlotte Bobcats\nNew Orleans Hornets\nNew Orleans Jazz\nVancouver Grizzlies\nSan Diego Rockets\nSan Francisco Warriors\nPhiladelphia Warriors\nSyracuse Nationals\nSt. Louis Hawks\nMilwaukee Hawks\nTri-Cities Blackhawks\nBuffalo Braves\nSan Diego Clippers\nCincinnati Royals\nRochester Royals\nKansas City Royals\nKansas City-Omaha Kings\nKansas City Kings\nFort Wayne Pistons\nMinneapolis Lakers\nSt. Louis Bombers\nChicago Stags\nCleveland Rebels\nDetroit Falcons\nPittsburgh Ironmen\nProvidence Steamrollers\nToronto Huskies\nIndianapolis Jets\nIndianapolis Olympians\nAnderson Packers\nSheboygan Red Skins\nWaterloo Hawks\nDenver Nuggets (Original 1948)\nChicago Bruins - Did not play",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "穿衣類型",
+        "content": "American Urban - 美式城市 / 你的基準\nJapanese City Boy - 日系 City Boy\nJapanese Amekaji - 日系阿美咔嘰\nKorean Soft Boy - 韓系軟少年\nKorean K-Hip Hop - 韓式街頭嘻哈\nFrench Parisian Casual - 法式巴黎休閒\nBritish Mod / Heritage Prep - 英式紳士復古\nItalian Sprezzatura - 義式隨性雅痞\nScandinavian Minimalist - 北歐極簡\nGerman Functional Tech - 德式機能\nNew York Ivy League - 常春藤學院\nCalifornia Surf & Skate - 加州衝浪滑板\nDetroit Workwear - 底特律工裝\nVintage Americana - 復古美式\nWestern Cowboy Core - 西部牛仔\nBritish Old Money - 英式老錢\nAmerican Old Money / Quiet Luxury - 美式老錢靜奢\nClean Fit - 乾淨極簡\nNormcore - 極簡常服\nBusiness Casual Smart - 商務休閒\nBlokecore / Football Casual - 足球少年\nCollege Varsity - 學院運動\nGorpcore / Outdoor Tech - 戶外機能\nMilitary Surplus - 軍事工裝\nBiker Moto Grunge - 重機騎士\nSkate Core - 滑板街頭\nHip-Hop 90s Boom Bap - 90s嘻哈黃金年代\nTrap Luxe / Drill Street - 現代陷阱奢華街頭\nAthleisure / Sport Luxe - 運動休閒奢華\nTechwear / Cyberpunk - 機能暗黑科技\nY2K Futurism / McBling - Y2K千禧辣妹\nIndie Sleaze - 獨立搖滾邋遢\nGrunge 90s Seattle - 90s油漬搖滾\nPunk Rock DIY - 龐克\nCoastal Grandpa - 海岸老爹 / 渡假感\nResort / Tropical Vacation - 渡假村\nMaximalist / Dopamine Dressing - 多巴胺多重搭配\nMinimal Monochrome - 極簡同色系\nAvant-Garde Deconstruction - 前衛解構\nGenderless Fluid Layering - 無性別流動疊穿\nBalletcore / Soft Gorpcore - 芭蕾輕機能\nLatin Reggaeton Core - 拉丁雷鬼頓街頭\nAfro Street / Afrofuturism - 非裔未來街頭\nCaribbean Dancehall - 加勒比海舞廳\nDubai Street Luxe - 杜拜街頭奢華\nAustralian Beach Urban - 澳洲海灘城市\nSoutheast Asian Night Market Flex - 東南亞夜市機能潮\nHong Kong MK Style - 港式MK潮流\nItalian Coastal Riviera - 義式海邊渡假\nJapanese Gorpcore Mountain - 日系山系機能",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "配件與妝容",
+        "content": "no makeup\nnatural makeup\nlight makeup\nheavy makeup\nglam makeup\ngoth makeup\nno accessories\nwearing glasses\nthin frame glasses\nthick frame glasses\nsunglasses\naviator sunglasses\ncontact lenses\nearrings\nhoop earrings\nstud earrings\nnose ring\nlip piercing\neyebrow piercing\nnecklace\nchoker\nhat\nbaseball cap\nbeanie\nheadband\ncrown\ntiara\nface mask\nmedical mask\nmakeup foundation\nconcealer\nblush\ncontour makeup\nhighlighter makeup\neyeshadow\nsmokey eyeshadow\neyeliner\nwinged eyeliner\nmascara\nfalse eyelashes\nred lipstick\npink lipstick\nnude lipstick\ndark lipstick\nlip gloss\nmatte lips makeup\nglitter makeup\nface paint\ntattoo on face\nmole sticker",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "鏡頭與構圖",
+        "content": "close-up shot\nextreme close-up shot\nheadshot\nportrait shot\nmedium shot\nmedium close-up\nbust shot\nshoulder shot\nupper body shot\nface centered\nrule of thirds composition\ncentered composition\nlow angle shot\nhigh angle shot\neye level shot\ndutch angle shot\nbird's eye view\nworm's eye view\nside view\nfront view\nthree quarter view\nprofile view\nover the shoulder shot\nselfie angle\nwide angle lens\ntelephoto lens\n50mm lens\n85mm lens\n35mm lens\nfisheye lens\nmacro shot\ndepth of field\nshallow depth of field\ndeep depth of field\nblurred background\nsharp focus\nsoft focus\ntilted frame\nstraight on\nlooking up at subject\nlooking down at subject\ncropped at forehead\ncropped at chin\nfull face in frame\noff-center face\nsymmetrical framing\nasymmetrical framing\ntight crop\nloose crop\ncinematic framing",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "光線",
+        "content": "soft lighting\nhard lighting\nstudio lighting\nnatural lighting\ndaylight\nsunlight\nmoonlight\nrim light\nbacklight\nfront light\nside light\ntop light\nbottom light\ndramatic lighting\ncinematic lighting\nvolumetric lighting\nneon lighting\nwarm lighting\ncool lighting\ngolden hour lighting\nblue hour lighting\novercast lighting\ndiffused lighting\nharsh shadow lighting\nsoft shadow\nno shadow\nhigh contrast lighting\nlow contrast lighting\nglowing light\nspotlight\nring light\nflash photography\nlens flare\nbokeh light\nfairy light\ncandle light\nfire light\nunderwater light\nunder lighting\nsplit lighting\nRembrandt lighting\nbutterfly lighting\nloop lighting\nbroad lighting\nshort lighting\nambient light\nfluorescent light\nLED light\ncolored gel lighting\nshadowy face lighting",
+        "active": true,
+        "lockedValue": null
+      }
+    ],
+    "alwaysTags": [
+      {
+        "text": "STRICT ratio 1:3 head-to-body, bobblehead base, oversized head + oversized hands + oversized feet, full bleed, no border, full body shot, extra large head, huge hands below knees, huge feet, clean sharp ink lines, flat color blocks with high-contrast minimal cell shading, sharp angular linework.",
+        "enabled": true,
+        "position": "beginning"
+      }
+    ],
+    "settings": {
+      "useTitles": true,
+      "useComma": true
+    }
+  },
+  "捏臉灌籃高手風": {
+    "columnCount": 15,
+    "columns": [
+      {
+        "title": "Generate",
+        "content": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10",
+        "active": true,
+        "lockedValue": "3"
+      },
+      {
+        "title": "Background ",
+        "content": "pure white background\npure black background\nlight gray background\ndark gray background\nbeige background\ncream background\nivory background\nlight pink background\nhot pink background\nred background\norange background\nyellow background\nlight blue background\ndark blue background\nnavy background\nlight green background\ndark green background\npurple background\nbrown background\nskin tone background\nwhite to gray gradient background\npink to purple gradient background\nblue to purple gradient background\norange to pink gradient background\nblue to cyan gradient background\nyellow to orange gradient background\nblack to dark gray gradient background\npastel gradient background\nneon gradient background\nsunset gradient background\nbusy street background\nempty street background\nneon street at night background\nTokyo street background\nNew York street background\nalley street background\ngraffiti wall street background\nrainy street background\nstreet market background\nstreet with cars background\nliving room background\nbedroom background\noffice background\ncafe background\nlibrary background\nstudio background\nkitchen background\nbathroom background\nclassroom background\nhospital background\nbasketball court background\nfootball field background\nsoccer field background\ntennis court background\nbaseball field background\ngym background\nfitness gym background\nboxing ring background\nswimming pool background\nrunning track background\nskate park background\nyoga studio background\nvolleyball court background\nbadminton court background\ngolf course background\nbowling alley background\nclimbing gym background\nwrestling mat background\nstadium background\nplayground background",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "年齡性別",
+        "content": "baby\ntoddler\nchild\nyoung child\npreteen\nteenager\n16 year old\n18 year old\n20 year old\nyoung adult\n25 year old\n30 year old\n35 year old\n40 year old\nmiddle aged\n50 year old\nelderly\n60 year old\n70 year old\n80 year old\nold man\nold woman\nyoung man\nyoung woman\nmale\nfemale\nandrogynous\nmasculine features\nfeminine features\nboyish look\ngirlish look\nmature male\nmature female\nyouthful male\nyouthful female\nnon-binary appearance\ntransgender appearance\nbaby face\naged face\nteen boy\nteen girl\nadult man\nadult woman\nsenior man\nsenior woman\nchildlike face\nmature face\nageless face\ngender neutral face\nstrong masculine jaw\nsoft feminine face",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "頭部姿態與視線",
+        "content": "front facing\nprofile view left\nprofile view right\nthree quarter view left\nthree quarter view right\nlooking straight at camera\nlooking away from camera\nlooking up\nlooking down\nlooking to the left\nlooking to the right\nhead tilted left\nhead tilted right\nchin up\nchin down\nhead turned over shoulder\neyes closed looking down\nhead leaning forward\nhead leaning backward\ndirect eye contact",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "臉型",
+        "content": "square face\nround face\nlong face\noval face\nheart face\ndiamond face\ninverted triangle face\ntriangle face\npear face\ntrapezoid face\ninverted trapezoid face\npentagon face\nhexagon face\noctagon face\nrectangle face\nwide square face\nnarrow rectangle face\nsoft square face\noblong face\nV-shaped face\nU-shaped face\nH-shaped face\nO-shaped face\nA-shaped face\nX-shaped face\negg-shaped face\napple-shaped face\npapaya-shaped face\ncantaloupe face\nmelon seed face\nshield face\nmaple leaf face\npetal face\nteardrop face\naxe-shaped face\nboot-shaped face\ngourd-shaped face\nbell-shaped face\nchiseled face\nslim face\nchubby face\nangular face\nsoft round face\ndefined jawline face\ntapered face\nwide cheekbone face\nnarrow chin face\nhigh forehead face\nflat face\ncontoured face",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "髮型",
+        "content": "short spiky red buzz cut\nblack middle part long hair\nlong hair covering forehead\nshort permed curly hair\nshaved bald head\nshort black buzz cut with goatee\nshort brown hair with side part\nlong black hair tied in small ponytail\nspiky blonde short hair\nblack short hair with shaved lines\nvery short black crew cut\nlong straight black hair\nshort spiky black hair\nshort black hair with bangs\nslicked back black hair\nshort brown spiky hair\nshort black hair with cap\nshort silver gray hair\nlong wavy black hair\nshort black buzz cut with headband\nshort black hair\nshort brown buzz cut\nlong black hair in high ponytail\nshort blonde spiky hair\nshort black hair with white headband\nmessy black short hair\nblack afro\nlong black hair with middle part and beard\nshort red hair with shaved sides\nshort black hair with receding hairline\nshort brown hair with natural curls\nblack short hair with thick sideburns\nshort dark blue hair\nlong black hair with center part\nshort black hair with two-block cut\nshort blonde crew cut\nlong brown hair\nshort black hair with messy spikes\nbald with mustache\nshort black hair with red headband\nshort greenish black hair\nshort hair with bleached tips\nvery long black hair\nshort brown hair with bangs\nshort black hair with undercut\nlong black hair tied with bandana\nshort black hair with white shaved pattern\nshort black hair with sweatband\nshort graying black hair\nshort black hair with natural volume",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "FACIAL FEATURES",
+        "content": "thick sharp downward eyebrows and narrow eyes\nthick eyebrows and round dot eyes\nthin sharp eyes with calm expression\nsmall sharp eyes with thick eyebrows\ndroopy eyes with kind eyebrows\nsharp eyes with scar on eyebrow\nnarrow fox-like eyes\nbig round eyes with thick eyebrows\nnarrow eyes with glasses\nsharp eyes with high nose bridge\nthick bushy eyebrows and small eyes\nthin eyebrows and sharp eyes\nsingle eyelid narrow eyes\nbig sharp eyes with intense gaze\nsmall eyes with friendly smile lines\nsharp eyes with thick lips\nnarrow eyes with square jaw\nround eyes with thick lips\nsharp eyes with sunken cheeks\nthick eyebrows and buck teeth\nnarrow eyes with goatee\nsharp eyes with strong chin\nround face with small eyes\nlong face with sharp eyes\nsquare face with thick eyebrows\nsharp eyes with freckles\nnarrow eyes with mustache\nbig eyes with small nose\nthick eyebrows and muscular nose\nsharp eyes with thick neck\ncalm thin eyes\nangry thick eyebrows and glaring eyes\nsleepy droopy eyes\nsharp eyes with sweat drops\nnarrow eyes with cold gaze\nthick eyebrows and wide nostrils\nsharp eyes with clenched teeth\nround glasses with sharp eyes behind\nsmall eyes with big head\nsharp eyes with sharp jawline\nthick eyebrows and deep eye sockets\nnarrow eyes with high cheekbones\nsharp eyes with thin lips\nfriendly round eyes\nsharp eyes with thick sideburns\nnarrow eyes with bald head\nbig round eyes with surprise\nsharp eyes with stubble beard\nnarrow eyes with smirking mouth\nthick eyebrows and serious face",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "臉部毛髮",
+        "content": "clean shaven\nstubble\nlight stubble\nheavy stubble\n5 o'clock shadow\ndesigner stubble\ngoatee\ncircle beard\nanchor beard\nsoul patch\nchin strap beard\nchin curtain beard\nfull beard\nshort beard\nmedium beard\nlong beard\nbushy beard\ntrimmed beard\nshaped beard\nfaded beard\npatchy beard\nthick beard\nthin beard\nmustache\nhandlebar mustache\npencil mustache\nchevron mustache\nhorseshoe mustache\nwalrus mustache\nfu manchu mustache\ndali mustache\ntoothbrush mustache\nenglish mustache\nlampshade mustache\npainter's brush mustache\nsideburns\nshort sideburns\nlong sideburns\nmutton chops\nfriendly mutton chops\npeach fuzz\nsparse facial hair\nthick facial hair\ncurly beard\nstraight beard\nwavy beard\ngrey beard\nsalt and pepper beard\nblonde beard\ndyed beard",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "膚色質感",
+        "content": "fair skin\nvery fair skin\npale skin\nlight skin\nmedium light skin\nolive skin\ntan skin\nmedium tan skin\ndark tan skin\nbrown skin\ndark brown skin\nvery dark skin\nblack skin\nporcelain skin\nivory skin\nbeige skin\ncaramel skin\nbronze skin\nebony skin\nyellow undertone skin\npink undertone skin\nneutral undertone skin\nwarm undertone skin\ncool undertone skin\nsmooth skin\ntextured skin\nporous skin\nglowing skin\noily skin\ndry skin\nmatte skin\ndewy skin\nfreckled skin\nclear skin\nacne skin\nscarred skin\nwrinkled skin\naged skin\nyouthful skin\nsunburned skin\nsun damaged skin\nvitiligo skin\nrosy cheeks\nflushed skin\npale complexion\nsweaty skin\nwet skin\npowdery skin\nnatural skin texture",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "表情",
+        "content": "smirking confident with fangs\nserious frown with intense eyes\ncold indifferent poker face\nyelling angry with veins on forehead\nlaughing loudly with mouth open\ncrying with tears and snot\ndepressed with dark cloud\nshocked with wide open mouth\nsweating nervous with awkward smile\nglaring sideways with anger\nconfident smirk with arms crossed\nexhausted panting with sweat\nhappy innocent smile\nserious with sweat drop\nangry gritting teeth\ncool calm with closed eyes\nembarrassed blushing\ndetermined clenching jaw\nprovoking with tongue out\nsad looking down\nexcited shouting with joy\nannoyed with half-closed eyes\nsmirking with one eyebrow raised\nfocused staring at basketball\nfearful with pale face\nproud chest out smile\nlonely with dark background\nangry with fire in eyes\ncalm gentle smile\nsmug looking down on opponent\ncrying while smiling\nserious with hands on hips\nshocked with sweat flying\nconfident pointing finger\ntired with towel on head\nangry with clenched fist\ncool with sweat dripping from chin\ninnocent with question mark\ndetermined with blood and sweat\nlaughing with eyes closed\nserious with arms crossed\nyelling instructions\nsmirking with basketball on finger\nblank white eyes shocked\ngentle smile with eyes closed\nangry with steam from head\nconfident with wink\nexhausted lying on floor\nserious with sharp light in eyes\ntriumphant roar with fists up",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "配件與妝容",
+        "content": "no makeup\nnatural makeup\nlight makeup\nheavy makeup\nglam makeup\ngoth makeup\nno accessories\nwearing glasses\nthin frame glasses\nthick frame glasses\nsunglasses\naviator sunglasses\ncontact lenses\nearrings\nhoop earrings\nstud earrings\nnose ring\nlip piercing\neyebrow piercing\nnecklace\nchoker\nhat\nbaseball cap\nbeanie\nheadband\ncrown\ntiara\nface mask\nmedical mask\nmakeup foundation\nconcealer\nblush\ncontour makeup\nhighlighter makeup\neyeshadow\nsmokey eyeshadow\neyeliner\nwinged eyeliner\nmascara\nfalse eyelashes\nred lipstick\npink lipstick\nnude lipstick\ndark lipstick\nlip gloss\nmatte lips makeup\nglitter makeup\nface paint\ntattoo on face\nmole sticker",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "鏡頭與構圖",
+        "content": "close-up shot\nextreme close-up shot\nheadshot\nportrait shot\nmedium shot\nmedium close-up\nbust shot\nshoulder shot\nupper body shot\nface centered\nrule of thirds composition\ncentered composition\nlow angle shot\nhigh angle shot\neye level shot\ndutch angle shot\nbird's eye view\nworm's eye view\nside view\nfront view\nthree quarter view\nprofile view\nover the shoulder shot\nselfie angle\nwide angle lens\ntelephoto lens\n50mm lens\n85mm lens\n35mm lens\nfisheye lens\nmacro shot\ndepth of field\nshallow depth of field\ndeep depth of field\nblurred background\nsharp focus\nsoft focus\ntilted frame\nstraight on\nlooking up at subject\nlooking down at subject\ncropped at forehead\ncropped at chin\nfull face in frame\noff-center face\nsymmetrical framing\nasymmetrical framing\ntight crop\nloose crop\ncinematic framing",
+        "active": false,
+        "lockedValue": null
+      },
+      {
+        "title": "光線",
+        "content": "soft lighting\nhard lighting\nstudio lighting\nnatural lighting\ndaylight\nsunlight\nmoonlight\nrim light\nbacklight\nfront light\nside light\ntop light\nbottom light\ndramatic lighting\ncinematic lighting\nvolumetric lighting\nneon lighting\nwarm lighting\ncool lighting\ngolden hour lighting\nblue hour lighting\novercast lighting\ndiffused lighting\nharsh shadow lighting\nsoft shadow\nno shadow\nhigh contrast lighting\nlow contrast lighting\nglowing light\nspotlight\nring light\nflash photography\nlens flare\nbokeh light\nfairy light\ncandle light\nfire light\nunderwater light\nunder lighting\nsplit lighting\nRembrandt lighting\nbutterfly lighting\nloop lighting\nbroad lighting\nshort lighting\nambient light\nfluorescent light\nLED light\ncolored gel lighting\nshadowy face lighting",
+        "active": false,
+        "lockedValue": null
+      },
+      {
+        "title": "Image ratio",
+        "content": "1:1\n2:5\n3:4\n4:3\n9:16\n16:9",
+        "active": true,
+        "lockedValue": "3:4"
+      },
+      {
+        "title": "JERSEY",
+        "content": "SHOHOKU red jersey number 10 - 湘北紅色10號\nSHOHOKU white jersey number 10 - 湘北白色10號\nRYONAN blue jersey number 7 - 陵南藍色7號 仙道\nRYONAN blue jersey number 4 - 陵南藍色4號 魚住\nKAINAN yellow jersey number 6 - 海南黃色6號 清田\nKAINAN yellow jersey number 4 - 海南黃色4號 牧紳一\nSHOYO white and green jersey number 4 - 翔陽白綠4號 藤真\nSHOYO white and green jersey number 8 - 翔陽白綠8號 花形\nMIURADAI purple jersey number 6 - 三浦台紫色6號 村雨\nMIURADAI purple jersey number 4 - 三浦台紫色4號 内藤\nTAKEZONO orange jersey number 5 - 武園橘色5號 小田\nSANNOH red jersey number 9 - 山王工業紅色9號 澤北\nSANNOH red jersey number 4 - 山王工業紅色4號 深津\nSANNOH red jersey number 5 - 山王工業紅色5號 河田雅史\nTOYOTAMA green jersey number 5 - 豐玉綠色5號 南烈\nTOYOTAMA green jersey number 4 - 豐玉綠色4號 板倉\nTOYOTAMA green jersey number 8 - 豐玉綠色8號 岸本\nDAIEI GAKUEN white jersey number 4 - 大榮學園白色4號 土屋淳\nAIWA GAKUIN light blue jersey number 4 - 愛和學院淺藍4號 諸星大\nMEIHO KOGYO dark blue jersey number 4 - 名朋工業深藍4號 森重寬\nHAKATA SHOGYO green jersey - 博多商大附屬綠色\nRAKUAN purple jersey - 洛安高校紫色\nTAKEZATO blue jersey - 武里高校藍色\nTSUKUBU white jersey number 10 - 津久武白色10號 南鄉\nRYOKUFU yellow jersey - 綠風高校黃色\nJOSEI white jersey - 常誠高校白色\nSHOHOKU black practice jersey - 湘北黑色練習服\nSHOHOKU red jersey number 11 - 湘北紅色11號 流川楓\nSHOHOKU red jersey number 14 - 湘北紅色14號 三井壽\nSHOHOKU red jersey number 7 - 湘北紅色7號 宮城\nSHOHOKU red jersey number 4 - 湘北紅色4號 赤木\nKAINAN yellow jersey number 9 - 海南黃色9號 神宗一郎\nRYONAN blue jersey number 8 - 陵南藍色8號 池上\nSHOYO white and green jersey number 5 - 翔陽白綠5號 長谷川\nSANNOH red jersey number 6 - 山王工業紅色6號 松本稔\nSANNOH red jersey number 7 - 山王工業紅色7號 野邊將廣\nSANNOH red jersey number 8 - 山王工業紅色8號 一之倉聰\nTOYOTAMA green jersey number 6 - 豐玉綠色6號 矢嶋\nDAIEI GAKUEN white jersey number 5 - 大榮學園白色5號\nAIWA GAKUIN light blue jersey number 5 - 愛和學院淺藍5號\nMEIHO KOGYO dark blue jersey number 5 - 名朋工業深藍5號\nMIURADAI purple jersey number 5 - 三浦台紫色5號 荒木\nSHOHOKU red jersey number 5 - 湘北紅色5號 木暮\nKAINAN yellow jersey number 5 - 海南黃色5號 高砂一馬\nRYONAN blue jersey number 5 - 陵南藍色5號 越野\nSHOYO combined team white jersey - 翔陽陵南聯隊白色\nSHOHOKU middle school black jersey - 湘北中學黑色球衣 武石中學\nWAKOH middle school white jersey - 和光中學白色\nALL-STAR white jersey KANAGAWA - 神奈川縣選拔隊白色\nSHOHOKU red jersey number 10 with headband - 湘北紅色10號+白色髮帶",
+        "active": true,
+        "lockedValue": null
+      }
+    ],
+    "alwaysTags": [
+      {
+        "text": "upper body portrait, head and shoulders, entire head fully visible with generous headroom above head, no cropping, centered composition, from chest up,",
+        "enabled": true,
+        "position": "after_col_1"
+      },
+      {
+        "text": "wearing RYONAN blue jersey number 8,slam dunk 1993 anime style, takehiko inoue character design, thick bold black outlines, thin inner detail lines, 90s cel shading, muted retro colors,\ndramatic lighting on face",
+        "enabled": true,
+        "position": "end"
+      }
+    ],
+    "settings": {
+      "useTitles": true,
+      "useComma": true
+    }
+  },
+  "200種狗類圖案變換": {
+    "columnCount": 12,
+    "generateCount": 2,
+    "columns": [
+      {
+        "title": "Generate image",
+        "content": "1\n2\n3\n4\n5\n6",
+        "active": false,
+        "lockedValue": null
+      },
+      {
+        "title": "INK_COLOR",
+        "content": "深海藍 ink on\n午夜黑 ink on\n復古紅 ink on\n番茄紅 ink on\n磚紅色 ink on\n鐵鏽紅 ink on\n芥末黃 ink on\n薑黃色 ink on\n森林綠 ink on\n苔蘚綠 ink on\n橄欖綠 ink on\n薄荷綠 ink on\n湖水綠 ink on\n天空藍 ink on\n牛仔藍 ink on\n普魯士藍 ink on\n靛藍色 ink on\n寶藍色 ink on\n薰衣草紫 ink on\n葡萄紫 ink on\n焦糖棕 ink on\n可可棕 ink on\n胡桃棕 ink on\n炭灰色 ink on\n石板灰 ink on\n墨黑色 ink on\n象牙黑 ink on\n櫻桃紅 ink on\n珊瑚粉 ink on\n鮭魚粉 ink on\n蜜桃橘 ink on\n南瓜橘 ink on\n日落橙 ink on\n檸檬黃 ink on\n奶油黃 ink on\n酪梨綠 ink on\n松葉綠 ink on\n海藻綠 ink on\n孔雀藍 ink on\n矢車菊藍 ink on\n霧霾藍 ink on\n午夜紫 ink on\n梅子紫 ink on\n磚瓦棕 ink on\n沙漠棕 ink on\n拿鐵棕 ink on\n鐵灰色 ink on\n水泥灰 ink on\n純白色 ink on\n深海藍配米白 ink on\n午夜黑配番茄紅 ink on\n復古紅配芥末黃 ink on\n森林綠配奶油黃 ink on\n牛仔藍配鮭魚粉 ink on\n普魯士藍配日落橙 ink on\n炭灰配櫻桃紅 ink on\n可可棕配天空藍 ink on\n橄欖綠配磚紅色 ink on\n靛藍配南瓜橘 ink on\n黑色配檸檬黃 ink on\n鐵鏽紅配霧霾藍 ink on\n苔蘚綠配蜜桃橘 ink on\n寶藍色配珊瑚粉 ink on\n胡桃棕配薄荷綠 ink on\n石板灰配薑黃色 ink on\n葡萄紫配芥末黃 ink on\n海藻綠配象牙白 ink on\n焦糖棕配矢車菊藍 ink on\n墨黑配海水綠 ink on\n櫻桃紅配牛仔藍 ink on\n鮭魚粉配森林綠 ink on\n日落橙配普魯士藍 ink on\n檸檬黃配午夜紫 ink on\n奶油黃配磚瓦棕 ink on\n松葉綠配番茄紅 ink on\n天空藍配鐵鏽紅 ink on\n薰衣草紫配南瓜橘 ink on\n拿鐵棕配寶藍色 ink on\n水泥灰配珊瑚粉 ink on\n深海藍配芥末黃 ink on\n午夜黑配薄荷綠 ink on\n復古紅配天空藍 ink on\n森林綠配鮭魚粉 ink on\n牛仔藍配檸檬黃 ink on\n普魯士藍配蜜桃橘 ink on\n炭灰配日落橙 ink on\n可可棕配薰衣草紫 ink on\n橄欖綠配櫻桃紅 ink on\n靛藍配奶油黃 ink on\n黑色配珊瑚粉 ink on\n鐵鏽紅配酪梨綠 ink on\n苔蘚綠配矢車菊藍 ink on\n寶藍色配焦糖棕 ink on\n胡桃棕配櫻桃紅 ink on\n石板灰配海水綠 ink on\n葡萄紫配南瓜橘 ink on\n海藻綠配日落橙 ink on\n焦糖棕配薄荷綠 ink on\n墨黑配芥末黃配復古紅 ink on",
+        "active": true,
+        "lockedValue": "深海藍 ink on"
+      },
+      {
+        "title": "BACKGROUND_COLOR",
+        "content": "米白色 background\n奶油白 background\n象牙白 background\n珍珠白 background\n骨白色 background\n羊皮白 background\n亞麻白 background\n燕麥色 background\n杏仁白 background\n香草白 background\n米黃色 background\n淺卡其 background\n沙色 background\n沙丘色 background\n沙漠米 background\n燕麥奶色 background\n奶茶色 background\n拿鐵色 background\n淺駝色 background\n麻灰白 background\n霧白色 background\n月光白 background\n雪白色 background\n石膏白 background\n水泥白 background\n淺灰白 background\n薄霧灰 background\n煙灰白 background\n鵝卵石灰 background\n石頭灰 background\n淺鼠灰 background\n雲朵灰 background\n天空灰 background\n晨霧藍 background\n淺天藍 background\n冰川藍 background\n嬰兒藍 background\n粉藍白 background\n矢車菊白 background\n湖水白 background\n薄荷白 background\n鼠尾草白 background\n抹茶白 background\n酪梨白 background\n橄欖白 background\n蘆薈綠白 background\n海鹽白 background\n海泡白 background\n淺湖綠 background\n冰薄荷 background\n淡薰衣草 background\n丁香紫白 background\n芋頭白 background\n淡藤紫 background\n櫻花粉白 background\n嬰兒粉 background\n蜜桃白 background\n鮭魚白 background\n珊瑚白 background\n杏桃色 background\n蜜瓜白 background\n檸檬白 background\n奶油黃白 background\n香蕉白 background\n酪梨黃白 background\n向日葵白 background\n芥末白 background\n薑黃白 background\n蜜糖黃 background\n南瓜白 background\n柑橘白 background\n日落白 background\n鮭魚橘白 background\n蜜桃橘白 background\n南瓜橘白 background\n芒果白 background\n淺鮭粉 background\n豆沙粉 background\n乾燥玫瑰白 background\n藕粉色 background\n灰粉色 background\n裸粉色 background\n淺磚紅白 background\n鐵鏽白 background\n陶土白 background\n磚瓦白 background\n可可白 background\n胡桃白 background\n焦糖白 background\n拿鐵白 background\n摩卡白 background\n肉桂白 background\n太妃糖白 background\n蜂蜜白 background\n淺橄欖白 background\n苔蘚白 background\n森林白 background\n松葉白 background\n苔蘚灰白 background\n橄欖灰白 background\n灰綠白 background\n牛仔藍白 background\n丹寧白 background\n石板藍白 background\n霧霾藍白 background\n普魯士藍白 background\n午夜藍白 background",
+        "active": true,
+        "lockedValue": "米白色 background"
+      },
+      {
+        "title": "SUBJECT",
+        "content": "法國鬥牛犬\n英國鬥牛犬\n柴犬\n秋田犬\n柯基\n臘腸犬\n黃金獵犬\n拉布拉多\n哈士奇\n阿拉斯加雪橇犬\n薩摩耶\n博美犬\n貴賓犬\n比熊犬\n雪納瑞\n約克夏\n馬爾濟斯\n吉娃娃\n蝴蝶犬\n巴哥犬\n米格魯\n大麥町\n邊境牧羊犬\n喜樂蒂牧羊犬\n德國牧羊犬\n澳洲牧羊犬\n古代牧羊犬\n可卡犬\n英國可卡犬\n美國可卡犬\n查理王小獵犬\n傑克羅素㹴\n西高地白㹴\n蘇格蘭㹴\n牛頭㹴\n斯塔福郡鬥牛㹴\n美國斯塔福郡㹴\n鬥牛㹴\n沙皮狗\n鬆獅犬\n北京犬\n西施犬\n巴吉度獵犬\n尋血獵犬\n阿富汗獵犬\n靈緹犬\n惠比特犬\n義大利靈緹\n愛爾蘭獵狼犬\n大丹犬\n聖伯納犬\n伯恩山犬\n大白熊犬\n紐芬蘭犬\n藏獒\n羅威納犬\n杜賓犬\n拳師犬\n英國鬥牛獒\n那不勒斯獒犬\n西班牙獒犬\n高加索牧羊犬\n中亞牧羊犬\n比利時牧羊犬\n荷蘭牧羊犬\n白瑞士牧羊犬\n威爾斯柯基犬\n彭布羅克柯基\n卡迪根柯基\n澳洲牧牛犬\n西伯利亞哈士奇\n薩路基獵犬\n法老王獵犬\n巴仙吉犬\n柴犬豆柴\n四國犬\n紀州犬\n北海道犬\n土佐犬\n韓國珍島犬\n泰國脊背犬\n墨西哥無毛犬\n秘魯無毛犬\n中國冠毛犬\n西藏㹴\n西藏獵犬\n拉薩犬\n英國跳獵犬\n威瑪獵犬\n布列塔尼獵犬\n德國短毛指示犬\n愛爾蘭雪達犬\n黃金拉布拉多混種\n拉布拉多貴賓混種\n黃金貴賓混種\n瑪爾濟斯貴賓混種\n柴犬柯基混種\n米克斯\n傑克羅素梗\n迷你雪納瑞\n巨型貴賓犬\n玩具貴賓犬\n迷你臘腸犬\n長毛臘腸犬",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "ACTION",
+        "content": "衝浪\n滑板\n騎腳踏車\n騎機車\n開吉普車\n打籃球\n踢足球\n打棒球\n打網球\n打高爾夫\n玩飛盤\n跳街舞\n彈吉他\n打鼓\nDJ刷碟\n衝浪板上比讚\n滑雪\n滑雪板\n攀岩\n跑步\n馬拉松衝線\n做瑜伽\n健身舉重\n拳擊\n空手道\n露營烤棉花糖\n釣魚\n划獨木舟\n划立槳SUP\n游泳\n潛水\n堆沙堡\n躺沙灘椅\n騎馬\n遛自己\n追尾巴轉圈\n飛高高跳躍\n比YA\n比愛心\n騎滑板車\n玩滑翔傘\n跳傘\n開飛機\n太空漫步\n騎衝浪板\n煮咖啡\n做漢堡\n吃披薩\n送外賣\n開校車\n當太空人\n當消防員\n當警察\n當船長\n當DJ\n當主唱\n躺著耍廢\n伸懶腰睡覺\n挖洞\n追球\n甩水\n打保齡球\n玩溜球\n玩魔術方塊\n玩滑板特技\n騎獨輪車\n騎越野摩托\n開堆高機\n開跑車甩尾\n跳彈簧床\n玩呼拉圈\n玩跳繩\n打羽毛球\n打桌球\n打撞球\n射箭\n舉啞鈴深蹲\n做伏地挺身\n打太極拳\n練雙截棍\n玩劍玉\n堆疊漢堡\n調酒搖杯\n拉花咖啡\n烤肉刷醬\n吃拉麵吸麵\n吃漢堡大口咬\n叼骨頭狂奔\n追貓\n追郵差\n送信\n扛衝浪板跑步\n沙灘排球殺球\n玩風箏衝浪\n玩水上摩托車\n浮潛看魚\n玩沙灘球\n蓋城堡沙雕\n野餐鋪地墊\n採蘑菇\n看星空望遠鏡",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "CLOTHING",
+        "content": "衝浪背心\n夏威夷花襯衫\n花朵海灘褲\n墨鏡\n backwards鴨舌帽\n漁夫帽\n草帽\n頭巾\n龐克鉚釘夾克\n牛仔外套\n連帽衛衣\n復古運動背心\n1號球衣\n條紋水手服\n海軍制服\n飛行員夾克\n皮夾克\n工裝背心\n工裝褲\n牛仔褲\n破洞牛仔褲\n西裝\n燕尾服\n廚師服\n咖啡師圍裙\n消防員制服\n太空人制服\n船長制服\n警察制服\n龐克T恤\n重金屬樂隊T\n彩虹條紋襪\n木屐\n人字拖\n衝浪腳繩\n金項鍊\n珍珠項鍊\n大耳機\n安全帽\n全罩式安全帽\n護目鏡\n拳擊手套\n籃球頭帶\n瑜伽運動服\n比基尼\n泳褲\n救生衣\n羽絨外套\n滑雪鏡配雪衣\n露營背心\n釣魚背心\n牛仔靴\n馬丁靴\n滑板鞋\n籃球鞋\n芭蕾舞裙\n聖誕老人裝\n萬聖節南瓜裝\n恐龍裝\n鯊魚裝\n披風超人裝\n忍者裝\n棒球帽正戴\n毛線帽\n貝雷帽\n報童帽\n牛仔帽\n安全頭盔\n工地頭盔\n廚師帽\n皇冠\n花環頭飾\n海盜眼罩\n單片眼鏡\n復古圓框眼鏡\n飛行員墨鏡\n運動太陽眼鏡\n口罩\n領巾絲巾\n蝴蝶領結\n領帶\n夏威夷花圈項鍊\n衝浪防寒衣\n潛水防寒衣\n沙灘罩衫\n浴袍\n睡衣\n連身工作服\n吊帶褲\n運動短褲\n百慕達短褲\n瑜伽褲\n芭蕾舞緊身衣\n龐克破洞褲\n皮褲\n軍裝迷彩服\n牛仔吊帶裙\n格子襯衫\n條紋POLO衫\n大學校隊外套\n運動發帶\n拳擊短褲",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "BACKGROUND ELEMENTS",
+        "content": "大海浪捲起\n白色浪花飛濺\n衝浪板\n太陽光芒\n夕陽半圓\n雲朵捲\n海鷗飛翔\n棕櫚樹\n椰子樹\n椰子掉落\n仙人掌\n沙灘\n沙灘腳印\n貝殼\n海星\n螃蟹橫走\n海龜\n鯨魚噴水\n鯊魚鰭\n章魚觸手\n海浪漩渦\n衝浪板蠟塊\n沙灘排球\n沙灘球\n救生圈\n救生員瞭望台\n燈塔\n帆船\n小木船\n遊艇\n衝浪小屋\n沙灘茅草傘\n沙灘躺椅\n冰桶飲料\n椰子飲料\n鳳梨飲料\n冰淇淋融化\n漢堡薯條\n披薩切片\n骨頭圖案\n狗腳印\n狗骨頭泡泡\n愛心泡泡\n星星閃光\n閃電圖案\n火焰圖案\n海浪線條\n風的線條\n速度線\n水滴飛濺",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "BACKGROUND ELEMENTS",
+        "content": "氣泡圈圈\n音符跳動\n吉他剪影\n鼓棒交叉\n海螺\n珍珠\n沙堡\n鏟子水桶\n太陽眼鏡倒影\n棕櫚葉\n花朵芙蓉\n木槿花\n雞蛋花\n向日葵\n星星花環\n月亮\n滿月\n新月配星星\n彩虹\n彩虹拱門\n火山冒煙\n海島剪影\n地圖圖釘\n指南針\n方向舵\n船錨\n繩結\n救生繩\n衝浪旗幟\n加州旗幟\n復古標語緞帶\n閃電徽章\n翅膀徽章\n皇冠徽章\n骷髏頭\n笑臉\n愛心手勢\nYA手勢\nShaka手勢\n浪花皇冠\n海浪王座\n啤酒泡沫\n咖啡蒸氣\n甜甜圈\n熱狗\n仙人掌冰棒\n衝浪板疊疊樂\n滑板輪子\n腳踏車輪胎痕\n機車排氣雲",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "BACKGROUND ELEMENTS",
+        "content": "汽車輪胎痕\n棕櫚樹影子\n椰林大道\n沙灘木棧道\n木頭紋理\n復古網點\n做舊噴點\n墨水暈染\n手繪星星\n手繪閃光\n手繪愛心\n手繪箭頭\n手繪閃電\n雲朵閃電\n雷達波紋\n海浪波紋\n同心圓波紋\n海鷗群飛\n魚群跳躍\n飛魚\n水母漂浮\n海豚跳躍\n鯨魚尾巴\n潛水面罩\n蛙鞋\n衝浪腳繩\n蠟燭\n篝火\n露營帳篷\n露營燈串\n仙人掌盆栽\n衝浪板插沙灘\n太陽笑臉\n月亮笑臉\n海浪笑臉\n椰子笑臉\n菠蘿笑臉\n復古廂型車\n衝浪廂型車\n吉普車\n沙灘越野車\n滑板場\n籃球場線條\n排球網\n羽毛球網\n棕櫚葉邊框\n貝殼邊框\n繩索邊框\n復古徽章外框\n圓形徽章圈",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "BACKGROUND ELEMENTS",
+        "content": "雙線徽章圈\n星星徽章圈\n閃電徽章圈\n海浪徽章底\n椰子樹小島\n小島剪影\n雲朵小島\n火山小島\n燈塔光束\n探照燈光束\n太陽光束線\n星光四射\n煙霧線條\n風捲線條\n海風線條\n沙塵線條\n水花皇冠\n水花翅膀\n海浪翅膀\n天使光環\n惡魔角\n海盜旗\n骷髏交叉骨\n交叉衝浪板\n交叉吉他\n交叉鼓棒\n交叉骨頭\n交叉棕櫚樹\n交叉閃電\n愛心浪花\n愛心太陽\n愛心貝殼\n狗骨頭愛心\n爪印愛心\n復古唱片\n卡帶\n收音機\n衝浪音樂音箱\n海浪音符\n星星雨\n花瓣雨\n紙屑彩帶\n彩色氣球\n風箏\n熱氣球\n滑翔傘剪影\n降落傘剪影\n飛機拉煙\n衝浪板貼紙\n復古郵票齒孔\n復古票根\n地圖虛線\n航海圖\n藏寶圖X記號\n望遠鏡\n羅盤玫瑰\n舵輪\n衝浪板鑰匙圈",
+        "active": true,
+        "lockedValue": null
+      },
+      {
+        "title": "image ratio",
+        "content": "1:1\n2:5\n3:4\n4:3\n9:16\n16:9",
+        "active": true,
+        "lockedValue": "3:4"
+      },
+      {
+        "title": "",
+        "content": "",
+        "active": false,
+        "lockedValue": null
+      }
+    ],
+    "alwaysTags": [
+      {
+        "text": "flat one-color vector graphic illustration, retro 70s California surf mascot logo, bold smooth thick outlines, solid color blocks only, minimal clean simple shapes, flat design, no shading, smooth curves, T-shirt graphic, centered composition",
+        "enabled": true,
+        "position": "beginning"
+      },
+      {
+        "text": "no woodcut, no engraving, no crosshatching, no halftone dots, no distressed texture, no sketch lines, no gradient, no shading, no thin lines",
+        "enabled": true,
+        "position": "end"
+      }
+    ],
+    "settings": {
+      "useTitles": false,
+      "useComma": true
+    }
+  }
+}
