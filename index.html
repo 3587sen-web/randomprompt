@@ -80,11 +80,12 @@
               </select>
             </div>
             <div class="preset-actions">
-              <button class="btn btn-preset load" id="btnLoadPreset" title="載入選取的設定檔">📂 載入</button>
-              <button class="btn btn-preset save" id="btnSavePreset" title="儲存當前內容至設定檔">💾 儲存</button>
-              <button class="btn btn-preset export" id="btnExportPresets" title="匯出所有設定檔至 JSON 檔案">⬇️ 匯出</button>
-              <button class="btn btn-preset import" id="btnImportPresetsTrigger" title="從 JSON 檔案匯入設定檔">⬆️ 匯入</button>
+              <button class="btn btn-preset load"   id="btnLoadPreset"          title="載入選取的設定檔">📂 載入</button>
+              <button class="btn btn-preset save"   id="btnSavePreset"          title="儲存當前內容至設定檔">💾 儲存</button>
               <button class="btn btn-preset delete btn-danger" id="btnDeletePreset" title="刪除選取的設定檔">🗑️ 刪除</button>
+              <button class="btn btn-preset export" id="btnExportPresets"       title="匯出所有設定檔至 JSON 檔案">⬇️ 匯出全部</button>
+              <button class="btn btn-preset export" id="btnExportSinglePreset"  title="匯出目前選取的單一設定檔">📤 匯出此檔</button>
+              <button class="btn btn-preset import" id="btnImportPresetsTrigger" title="從 JSON 檔案匯入設定檔">⬆️ 匯入</button>
             </div>
             <input type="file" id="importFileInput" accept=".json" style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
           </div>

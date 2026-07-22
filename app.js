@@ -1264,6 +1264,7 @@ const STORAGE_PREFIX = "aura_pg_";
 let modalResolver = null;
 let modalHideTimeout = null;  // tracks the 250ms hide timer to prevent race conditions
 let draggedCard = null;
+let alwaysDraggedRow = null;  // tracks dragged always-tag row
 
 // Initialize Elements
 document.addEventListener("DOMContentLoaded", () => {
@@ -1321,7 +1322,10 @@ function initElements() {
     // Portable Pack
     btnExportPortable: document.getElementById("btnExportPortable"),
     btnImportPortableTrigger: document.getElementById("btnImportPortableTrigger"),
-    portableFileInput: document.getElementById("portableFileInput")
+    portableFileInput: document.getElementById("portableFileInput"),
+
+    // Single preset export
+    btnExportSinglePreset: document.getElementById("btnExportSinglePreset")
   };
 }
 
@@ -1370,6 +1374,9 @@ function bindGlobalEvents() {
   elements.importFileInput.addEventListener("change", importPresetsFromFile);
   elements.btnDeletePreset.addEventListener("click", deleteSelectedPreset);
   
+  // Single preset export
+  elements.btnExportSinglePreset.addEventListener("click", exportSinglePreset);
+
   // Portable Pack
   elements.btnExportPortable.addEventListener("click", exportPortablePack);
   elements.btnImportPortableTrigger.addEventListener("click", () => elements.portableFileInput.click());
@@ -1505,6 +1512,23 @@ function renderColumnsGrid() {
     const idxBadge = document.createElement("div");
     idxBadge.className = "col-idx-badge";
     idxBadge.textContent = index + 1;
+    idxBadge.title = `點擊輸入目標位置號碼快速移動（目前第 ${index + 1} 欄）`;
+    idxBadge.addEventListener("click", async () => {
+      const currentIdx = state.columns.indexOf(col);
+      const total = state.columns.length;
+      const newPosStr = await showCustomPrompt(
+        "移動欄位位置",
+        `目前位置：第 ${currentIdx + 1} 欄「${col.title || '未命名'}」\n請輸入目標位置（1–${total}）：`,
+        String(currentIdx + 1)
+      );
+      if (newPosStr === null || newPosStr.trim() === "") return;
+      const newPos = parseInt(newPosStr);
+      if (isNaN(newPos) || newPos < 1 || newPos > total) {
+        showToast(`請輸入有效的位置（1–${total}）`, "error");
+        return;
+      }
+      moveColumnToPosition(currentIdx, newPos - 1);
+    });
     
     const titleInput = document.createElement("input");
     titleInput.className = "col-title-input";
@@ -1649,11 +1673,21 @@ function renderColumnsGrid() {
     
     footer.appendChild(lockSelect);
     footer.appendChild(counter);
-    
+
+    // Insert-after button
+    const insertBtn = document.createElement("button");
+    insertBtn.className = "btn-insert-col";
+    insertBtn.textContent = "＋ 插入";
+    insertBtn.title = `在第 ${index + 1} 欄後方插入新欄位`;
+    insertBtn.addEventListener("click", () => {
+      insertColumnAfter(state.columns.indexOf(col));
+    });
+    footer.appendChild(insertBtn);
+
     card.appendChild(header);
     card.appendChild(textWrapper);
     card.appendChild(footer);
-    
+
     elements.columnsGrid.appendChild(card);
     updateLinesCounter(card, col.content);
   });
@@ -1736,7 +1770,56 @@ function renderAlwaysTagsList() {
     const row = document.createElement("div");
     row.className = `always-row ${tag.enabled ? '' : 'inactive'}`;
     row.setAttribute("data-id", tag.id);
-    
+
+    // ── Drag Handle ──
+    const dragHandle = document.createElement("div");
+    dragHandle.className = "always-drag-handle";
+    dragHandle.innerHTML = "⠿";
+    dragHandle.title = "拖曳調整順序";
+
+    // Drag events on the ROW (enabled only via handle)
+    row.addEventListener("dragstart", (e) => {
+      alwaysDraggedRow = row;
+      e.dataTransfer.effectAllowed = "move";
+      setTimeout(() => row.classList.add("dragging-row"), 0);
+    });
+
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (!alwaysDraggedRow || alwaysDraggedRow === row) return;
+      const rect = row.getBoundingClientRect();
+      const relY = e.clientY - rect.top;
+      const parent = row.parentNode;
+      const rows = Array.from(parent.children);
+      const draggedIdx = rows.indexOf(alwaysDraggedRow);
+      const targetIdx  = rows.indexOf(row);
+      if (draggedIdx < targetIdx) {
+        if (relY > rect.height / 2) parent.insertBefore(alwaysDraggedRow, row.nextSibling);
+      } else {
+        if (relY < rect.height / 2) parent.insertBefore(alwaysDraggedRow, row);
+      }
+    });
+
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging-row");
+      row.setAttribute("draggable", "false");
+      alwaysDraggedRow = null;
+      // Sync state.alwaysTags from DOM order
+      const newTags = [];
+      elements.alwaysTagsGrid.querySelectorAll(".always-row").forEach((rowEl) => {
+        const tagId = parseInt(rowEl.getAttribute("data-id"));
+        const tagObj = state.alwaysTags.find(t => t.id === tagId);
+        if (tagObj) newTags.push(tagObj);
+      });
+      state.alwaysTags = newTags;
+      saveStateToStorage();
+      renderAlwaysTagsList();
+      autoGenerate();
+    });
+
+    dragHandle.addEventListener("mousedown", () => row.setAttribute("draggable", "true"));
+    dragHandle.addEventListener("mouseup",   () => row.setAttribute("draggable", "false"));
+
     // Position selection
     const posContainer = document.createElement("div");
     posContainer.className = "always-pos-container";
@@ -1824,6 +1907,7 @@ function renderAlwaysTagsList() {
     actions.appendChild(switchContainer);
     actions.appendChild(removeBtn);
     
+    row.appendChild(dragHandle);
     row.appendChild(posContainer);
     row.appendChild(input);
     row.appendChild(actions);
@@ -1882,6 +1966,82 @@ function setGenCount(count) {
 
 function adjustGenCount(amount) {
   setGenCount((state.generateCount || 1) + amount);
+}
+
+// ---------------------------------
+// Insert Column After
+// ---------------------------------
+
+function insertColumnAfter(index) {
+  if (state.columnCount >= 99) {
+    showToast("已達最高欄位上限 99 個", "error");
+    return;
+  }
+  const newCol = {
+    id: Date.now(),
+    title: "",
+    content: "",
+    active: true,
+    lockedValue: null
+  };
+  state.columns.splice(index + 1, 0, newCol);
+  state.columnCount = state.columns.length;
+  saveStateToStorage();
+  renderAll();
+  showToast(`已在第 ${index + 1} 欄後方插入新欄位`, "success");
+  autoGenerate();
+}
+
+// ---------------------------------
+// Move Column to Target Position
+// ---------------------------------
+
+function moveColumnToPosition(fromIndex, toIndex) {
+  const total = state.columns.length;
+  toIndex = Math.max(0, Math.min(total - 1, toIndex));
+  if (fromIndex === toIndex) return;
+  const [col] = state.columns.splice(fromIndex, 1);
+  state.columns.splice(toIndex, 0, col);
+  saveStateToStorage();
+  renderAll();
+  autoGenerate();
+  showToast(`欄位已移動至第 ${toIndex + 1} 位`, "success");
+}
+
+// ---------------------------------
+// Export Single Preset
+// ---------------------------------
+
+function exportSinglePreset() {
+  const name = elements.presetSelect.value;
+  if (!name) {
+    showToast("請先從下拉選單選取要匯出的設定檔", "error");
+    return;
+  }
+  const presets = getPresetsFromStorage();
+  const preset  = presets[name];
+  if (!preset) {
+    showToast("找不到此設定檔，請重新選取", "error");
+    return;
+  }
+
+  const fileContent = JSON.stringify(preset, null, 2);
+  const blob = new Blob([fileContent], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+
+  const safeFilename = name.replace(/[^a-zA-Z0-9\u4e00-\u9fff_\-]/g, "_");
+  const a = document.createElement("a");
+  a.href     = url;
+  a.download = `preset_${safeFilename}.json`;
+  document.body.appendChild(a);
+  a.click();
+
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+
+  showToast(`📤 設定檔「${name}」已單獨匯出`, "success");
 }
 
 function addNewColumn() {

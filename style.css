@@ -431,7 +431,7 @@ select:focus {
 
 .preset-actions {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -680,6 +680,17 @@ select:focus {
   font-family: var(--font-display);
   font-weight: 600;
   flex-shrink: 0;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.col-idx-badge:hover {
+  background: rgba(0, 242, 254, 0.2);
+  border-color: rgba(0, 242, 254, 0.5);
+  color: #fff;
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(0, 242, 254, 0.3);
 }
 
 .col-card.active .col-idx-badge {
@@ -748,6 +759,28 @@ select:focus {
   align-items: center;
   gap: 8px;
   margin-top: 4px;
+}
+
+/* Insert column button */
+.btn-insert-col {
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(67, 233, 123, 0.08);
+  border: 1px solid rgba(67, 233, 123, 0.2);
+  border-radius: 4px;
+  color: rgba(67, 233, 123, 0.7);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-insert-col:hover {
+  background: rgba(67, 233, 123, 0.18);
+  border-color: rgba(67, 233, 123, 0.5);
+  color: #43e97b;
+  transform: translateY(-1px);
 }
 
 .col-lock-select {
@@ -851,9 +884,9 @@ select:focus {
 /* Always Tag Row */
 .always-row {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: 20px auto 1fr auto;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -863,8 +896,8 @@ select:focus {
 
 @media (max-width: 768px) {
   .always-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
+    grid-template-columns: 20px 1fr;
+    gap: 10px;
   }
   .always-row .always-pos-dropdown {
     width: 100%;
@@ -875,9 +908,38 @@ select:focus {
   opacity: 0.45;
 }
 
+.always-row.dragging-row {
+  opacity: 0.35;
+  border-style: dashed;
+}
+
 .always-row:hover {
   border-color: var(--border-color-hover);
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* Always-tags drag handle */
+.always-drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 3px;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.always-drag-handle:hover {
+  color: var(--text-highlight);
+  background: rgba(0, 242, 254, 0.08);
+}
+
+.always-drag-handle:active {
+  cursor: grabbing;
 }
 
 /* Always position select */
