@@ -41,10 +41,11 @@
         
         <!-- Quick Actions -->
         <div class="action-buttons">
-          <button class="btn btn-primary" id="btnPrefill" title="填入預置常用提示詞">填入預設</button>
-          <button class="btn btn-secondary" id="btnAddNewCol" title="新增一個新欄位">+ 新增欄位</button>
-          <button class="btn btn-danger" id="btnEmptyContent" title="清空所有欄位內容">清空內容</button>
-          <button class="btn btn-danger" id="btnClearTitles" title="清空所有欄位標題">清空標題</button>
+          <button class="btn btn-primary"   id="btnPrefill"       title="填入預置常用提示詞">填入預設</button>
+          <button class="btn btn-secondary" id="btnAddNewCol"     title="新增一個新欄位">+ 新增欄位</button>
+          <button class="btn btn-secondary" id="btnResetDefault"  title="清除所有欄位並重設為 5 個空白欄位">⬜ 預設</button>
+          <button class="btn btn-danger"    id="btnEmptyContent"  title="清空所有欄位內容">清空內容</button>
+          <button class="btn btn-danger"    id="btnClearTitles"   title="清空所有欄位標題">清空標題</button>
         </div>
       </div>
     </header>
@@ -83,6 +84,7 @@
               <button class="btn btn-preset load"   id="btnLoadPreset"          title="載入選取的設定檔">📂 載入</button>
               <button class="btn btn-preset save"   id="btnSavePreset"          title="儲存當前內容至設定檔">💾 儲存</button>
               <button class="btn btn-preset delete btn-danger" id="btnDeletePreset" title="刪除選取的設定檔">🗑️ 刪除</button>
+              <button class="btn btn-preset export" id="btnDuplicatePreset"     title="複製目前選取的設定檔">📑 複製</button>
               <button class="btn btn-preset export" id="btnExportPresets"       title="匯出所有設定檔至 JSON 檔案">⬇️ 匯出全部</button>
               <button class="btn btn-preset export" id="btnExportSinglePreset"  title="匯出目前選取的單一設定檔">📤 匯出此檔</button>
               <button class="btn btn-preset import" id="btnImportPresetsTrigger" title="從 JSON 檔案匯入設定檔">⬆️ 匯入</button>
@@ -108,7 +110,12 @@
     <main class="columns-section">
       <div class="section-header">
         <h2>提示詞欄位區</h2>
-        <span class="badge" id="activeColsBadge">0 個啟用</span>
+        <div class="section-header-right">
+          <select id="colJumpSelect" class="col-jump-select">
+            <option value="">🔍 跳轉至欄位...</option>
+          </select>
+          <span class="badge" id="activeColsBadge">0 個啟用</span>
+        </div>
       </div>
       <div class="columns-grid" id="columnsGrid">
         <!-- Rendered dynamically by app.js -->

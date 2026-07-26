@@ -1272,6 +1272,9 @@ document.addEventListener("DOMContentLoaded", () => {
   loadStateFromStorage();
   bindGlobalEvents();
   
+  // Init clipboard body class
+  if (getClipboard()) document.body.classList.add("has-clipboard");
+  
   // Render initially
   renderAll();
 });
@@ -1325,7 +1328,12 @@ function initElements() {
     portableFileInput: document.getElementById("portableFileInput"),
 
     // Single preset export
-    btnExportSinglePreset: document.getElementById("btnExportSinglePreset")
+    btnExportSinglePreset: document.getElementById("btnExportSinglePreset"),
+
+    // New features
+    btnResetDefault:    document.getElementById("btnResetDefault"),
+    btnDuplicatePreset: document.getElementById("btnDuplicatePreset"),
+    colJumpSelect:      document.getElementById("colJumpSelect")
   };
 }
 
@@ -1351,6 +1359,7 @@ function bindGlobalEvents() {
   // Top Buttons
   elements.btnPrefill.addEventListener("click", prefillDefault);
   elements.btnAddNewCol.addEventListener("click", addNewColumn);
+  elements.btnResetDefault.addEventListener("click", resetToDefault);
   elements.btnEmptyContent.addEventListener("click", emptyAllContents);
   elements.btnClearTitles.addEventListener("click", clearAllTitles);
   
@@ -1376,6 +1385,22 @@ function bindGlobalEvents() {
   
   // Single preset export
   elements.btnExportSinglePreset.addEventListener("click", exportSinglePreset);
+
+  // Preset duplicate
+  elements.btnDuplicatePreset.addEventListener("click", duplicateSelectedPreset);
+
+  // Column jump select
+  elements.colJumpSelect.addEventListener("change", (e) => {
+    const colId = parseInt(e.target.value);
+    if (!colId) return;
+    const cardEl = elements.columnsGrid.querySelector(`[data-id="${colId}"]`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      cardEl.classList.add("highlight-flash");
+      setTimeout(() => cardEl.classList.remove("highlight-flash"), 1500);
+    }
+    e.target.value = ""; // reset to placeholder
+  });
 
   // Portable Pack
   elements.btnExportPortable.addEventListener("click", exportPortablePack);
@@ -1409,6 +1434,7 @@ function renderAll() {
   renderAlwaysTagsList();
   renderPresetsDropdown();
   updateHeaderStates();
+  updateColumnJumpSelect();
 }
 
 function updateHeaderStates() {
@@ -1553,7 +1579,21 @@ function renderColumnsGrid() {
     pinBtn.addEventListener("click", () => {
       togglePin(col, pinBtn, card);
     });
-    
+
+    // Copy button (📋)
+    const copyColBtn = document.createElement("button");
+    copyColBtn.className = "col-card-action-btn copy";
+    copyColBtn.innerHTML = "📋";
+    copyColBtn.title = "複製此欄位（標題 + 內容）";
+    copyColBtn.addEventListener("click", () => copyColumn(col));
+
+    // Cut button (✂️)
+    const cutColBtn = document.createElement("button");
+    cutColBtn.className = "col-card-action-btn cut";
+    cutColBtn.innerHTML = "✂️";
+    cutColBtn.title = "剪下此欄位（複製內容後清空）";
+    cutColBtn.addEventListener("click", () => cutColumn(col));
+
     // Active/Inactive toggle
     const toggleLabel = document.createElement("label");
     toggleLabel.className = "card-switch";
@@ -1588,6 +1628,8 @@ function renderColumnsGrid() {
     
     header.appendChild(titleContainer);
     header.appendChild(pinBtn);
+    header.appendChild(copyColBtn);
+    header.appendChild(cutColBtn);
     header.appendChild(toggleLabel);
     header.appendChild(removeBtn);
     
@@ -1672,7 +1714,42 @@ function renderColumnsGrid() {
     counter.className = "lines-counter";
     
     footer.appendChild(lockSelect);
+
+    // No-repeat mode toggle
+    const noRepeatBtn = document.createElement("button");
+    noRepeatBtn.className = `col-no-repeat-btn ${col.noRepeat ? 'active' : ''}`;
+    noRepeatBtn.textContent = "♻️";
+    noRepeatBtn.title = col.noRepeat
+      ? `不重複模式：開啟（已用 ${(col.usedValues || []).length} 個）點擊關閉`
+      : "不重複模式：關閉（點擊開啟）";
+    noRepeatBtn.addEventListener("click", () => {
+      col.noRepeat = !col.noRepeat;
+      if (!col.noRepeat) col.usedValues = [];
+      noRepeatBtn.className = `col-no-repeat-btn ${col.noRepeat ? 'active' : ''}`;
+      noRepeatBtn.title = col.noRepeat
+        ? `不重複模式：開啟（已用 ${(col.usedValues || []).length} 個）點擊關閉`
+        : "不重複模式：關閉（點擊開啟）";
+      saveStateToStorage();
+      showToast(
+        col.noRepeat
+          ? `♻️ 「${col.title || '此欄位'}」 已開啟不重複模式`
+          : `不重複模式已關閉，已清除已用記錄`,
+        "info"
+      );
+    });
+    footer.appendChild(noRepeatBtn);
+
     footer.appendChild(counter);
+
+    // Paste-after button (shown by CSS body.has-clipboard)
+    const pasteBtn = document.createElement("button");
+    pasteBtn.className = "btn-paste-col";
+    pasteBtn.textContent = "📌 貼入";
+    pasteBtn.title = `在第 ${index + 1} 欄後方貼入複製的欄位`;
+    pasteBtn.addEventListener("click", () => {
+      pasteColumnAfter(state.columns.indexOf(col));
+    });
+    footer.appendChild(pasteBtn);
 
     // Insert-after button
     const insertBtn = document.createElement("button");
@@ -1956,6 +2033,162 @@ function adjustColCount(amount) {
   setColCount(state.columnCount + amount);
 }
 
+// ---------------------------------
+// Clipboard (Column Copy/Cut/Paste)
+// ---------------------------------
+
+const CLIPBOARD_KEY = "aura_pg_clipboard";
+
+function getClipboard() {
+  try {
+    const data = localStorage.getItem(CLIPBOARD_KEY);
+    return data ? JSON.parse(data) : null;
+  } catch (e) { return null; }
+}
+
+function setClipboard(data) {
+  localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(data));
+  document.body.classList.add("has-clipboard");
+}
+
+function clearClipboard() {
+  localStorage.removeItem(CLIPBOARD_KEY);
+  document.body.classList.remove("has-clipboard");
+}
+
+function copyColumn(col) {
+  setClipboard({ title: col.title, content: col.content });
+  showToast(`📋 已複製欄位「${col.title || '（無標題）'}」`, "success");
+}
+
+function cutColumn(col) {
+  setClipboard({ title: col.title, content: col.content });
+  col.title   = "";
+  col.content = "";
+  col.lockedValue = null;
+  saveStateToStorage();
+  renderAll();
+  showToast(`✂️ 已剪下欄位（內容已清空，可貼入其他欄位後）`, "success");
+}
+
+function pasteColumnAfter(index) {
+  const clip = getClipboard();
+  if (!clip) {
+    showToast("剪貼簿是空的，請先複製或剪下一個欄位", "error");
+    return;
+  }
+  if (state.columnCount >= 99) {
+    showToast("已達最高欄位上限 99 個", "error");
+    return;
+  }
+  const newCol = {
+    id: Date.now(),
+    title: clip.title,
+    content: clip.content,
+    active: true,
+    lockedValue: null,
+    noRepeat: false,
+    usedValues: []
+  };
+  state.columns.splice(index + 1, 0, newCol);
+  state.columnCount = state.columns.length;
+  saveStateToStorage();
+  renderAll();
+  showToast(`📌 已在第 ${index + 1} 欄後貼入「${clip.title || '（無標題）'}」`, "success");
+  autoGenerate();
+}
+
+// ---------------------------------
+// Reset to Default (5 blank columns)
+// ---------------------------------
+
+async function resetToDefault() {
+  const confirmReset = await showCustomConfirm(
+    "重設為預設",
+    "將清除所有欄位並重設為 5 個空白欄位，此操作無法復原。確定要繼續嗎？",
+    true
+  );
+  if (!confirmReset) return;
+
+  state.columns = [];
+  for (let i = 0; i < 5; i++) {
+    state.columns.push({
+      id: Date.now() + i * 10,
+      title: "",
+      content: "",
+      active: true,
+      lockedValue: null,
+      noRepeat: false,
+      usedValues: []
+    });
+  }
+  state.columnCount = 5;
+  saveStateToStorage();
+  renderAll();
+  showToast("⬜ 已重設為 5 個空白欄位", "success");
+  autoGenerate();
+}
+
+// ---------------------------------
+// Duplicate Selected Preset
+// ---------------------------------
+
+async function duplicateSelectedPreset() {
+  const name = elements.presetSelect.value;
+  if (!name) {
+    showToast("請先選取要複製的設定檔", "error");
+    return;
+  }
+  const presets = getPresetsFromStorage();
+  const preset  = presets[name];
+  if (!preset) {
+    showToast("找不到此設定檔", "error");
+    return;
+  }
+
+  const defaultNewName = `${name} (複製)`;
+  const newName = await showCustomPrompt(
+    "設定檔複製",
+    `複製「${name}」，請輸入新的設定檔名稱：`,
+    defaultNewName
+  );
+  if (!newName || newName.trim() === "") return;
+  const trimmed = newName.trim();
+
+  if (presets[trimmed]) {
+    const overwrite = await showCustomConfirm(
+      "名稱已存在",
+      `設定檔「${trimmed}」已存在，確定要覆蓋嗎？`,
+      true
+    );
+    if (!overwrite) return;
+  }
+
+  presets[trimmed] = JSON.parse(JSON.stringify(preset)); // deep clone
+  savePresetsToStorage(presets);
+  renderPresetsDropdown();
+  elements.presetSelect.value = trimmed;
+  showToast(`📑 設定檔「${name}」已複製為「${trimmed}」`, "success");
+}
+
+// ---------------------------------
+// Column Jump Select
+// ---------------------------------
+
+function updateColumnJumpSelect() {
+  if (!elements.colJumpSelect) return;
+  elements.colJumpSelect.innerHTML = '<option value="">\ud83d\udd0d \u8df3\u8f49\u81f3\u6b04\u4f4d...</option>';
+  state.columns.forEach((col, idx) => {
+    const opt = document.createElement("option");
+    opt.value = col.id;
+    const label = col.title
+      ? `\u7b2c ${idx + 1} \u6b04 \u2014 ${col.title}`
+      : `\u7b2c ${idx + 1} \u6b04`;
+    opt.textContent = label;
+    elements.colJumpSelect.appendChild(opt);
+  });
+}
+
 function setGenCount(count) {
   let target = Math.max(1, Math.min(99, count));
   state.generateCount = target;
@@ -2222,10 +2455,27 @@ function generatePrompt(shouldAnimate = true) {
         
       if (lines.length === 0) return;
       
-      // Pick locked or random line
+      // Pick locked or random line (with noRepeat support)
       let selectedLine = "";
       if (col.lockedValue && lines.includes(col.lockedValue)) {
         selectedLine = col.lockedValue;
+      } else if (col.noRepeat) {
+        const usedSet = new Set(col.usedValues || []);
+        let available = lines.filter(l => !usedSet.has(l));
+        if (available.length === 0) {
+          // All used — reset and cycle
+          col.usedValues = [];
+          available = lines;
+          if (i === 0) {
+            showToast(`♻️ 「${col.title || '欄位'}」 已全部抽完，重新從頭循環`, "info");
+          }
+        }
+        selectedLine = available[Math.floor(Math.random() * available.length)];
+        if (i === 0) {
+          if (!col.usedValues) col.usedValues = [];
+          col.usedValues.push(selectedLine);
+          saveStateToStorage(); // persist used list
+        }
       } else {
         selectedLine = lines[Math.floor(Math.random() * lines.length)];
       }
