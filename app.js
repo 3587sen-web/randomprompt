@@ -1333,7 +1333,13 @@ function initElements() {
     // New features
     btnResetDefault:    document.getElementById("btnResetDefault"),
     btnDuplicatePreset: document.getElementById("btnDuplicatePreset"),
-    colJumpSelect:      document.getElementById("colJumpSelect")
+    colJumpSelect:      document.getElementById("colJumpSelect"),
+
+    // FAB quick copy
+    fabQuickCopy:  document.getElementById("fabQuickCopy"),
+    fabPreviewText: document.getElementById("fabPreviewText"),
+    fabCopyBtn:    document.getElementById("fabCopyBtn"),
+    fabCloseBtn:   document.getElementById("fabCloseBtn")
   };
 }
 
@@ -1415,6 +1421,21 @@ function bindGlobalEvents() {
   elements.btnCopyText.addEventListener("click", copyPromptText);
   elements.btnCopyJson.addEventListener("click", copyPromptJson);
   
+  // FAB quick copy
+  elements.fabCopyBtn.addEventListener("click", () => {
+    const text = elements.fabQuickCopy.dataset.fullText || "";
+    if (!text) return;
+    copyToClipboard(text);
+    elements.fabCopyBtn.classList.add("copied");
+    elements.fabCopyBtn.querySelector(".fab-label").textContent = "已複製!";
+    setTimeout(() => {
+      elements.fabCopyBtn.classList.remove("copied");
+      elements.fabCopyBtn.querySelector(".fab-label").textContent = "複製";
+    }, 1800);
+  });
+
+  elements.fabCloseBtn.addEventListener("click", () => hideFab());
+
   // Modal cancel/close
   elements.modalCancelBtn.addEventListener("click", () => closeModal(false));
   elements.modalCloseX.addEventListener("click", () => closeModal(false));
@@ -2679,6 +2700,50 @@ function generatePrompt(shouldAnimate = true) {
     const toastMsg = genCount > 1 ? `🔮 已隨機生成 ${genCount} 組新提示詞` : "🔮 已隨機生成新提示詞";
     showToast(toastMsg, "info");
   }
+
+  // Update floating quick-copy FAB
+  if (generatedPrompts.length > 0) {
+    showFab(generatedPrompts[0]);
+  }
+}
+
+// ---------------------------------
+// Floating Quick-Copy FAB
+// ---------------------------------
+
+let fabHideTimer = null;
+
+function showFab(promptText) {
+  const fab = elements.fabQuickCopy;
+  if (!fab) return;
+
+  // Store the full text for copy
+  fab.dataset.fullText = promptText;
+
+  // Set preview (first ~50 chars)
+  const preview = promptText.replace(/\n/g, ", ").slice(0, 55);
+  elements.fabPreviewText.textContent = preview + (promptText.length > 55 ? "…" : "");
+
+  // Reset copy button label
+  elements.fabCopyBtn.classList.remove("copied");
+  elements.fabCopyBtn.querySelector(".fab-label").textContent = "複製";
+
+  // Show with animation
+  fab.classList.remove("hiding");
+  fab.style.display = "flex";
+
+  // Clear any pending hide timer
+  if (fabHideTimer) clearTimeout(fabHideTimer);
+}
+
+function hideFab() {
+  const fab = elements.fabQuickCopy;
+  if (!fab || fab.style.display === "none") return;
+  fab.classList.add("hiding");
+  fabHideTimer = setTimeout(() => {
+    fab.style.display = "none";
+    fab.classList.remove("hiding");
+  }, 260);
 }
 
 // ---------------------------------

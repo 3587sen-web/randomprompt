@@ -1569,3 +1569,123 @@ body.has-clipboard .btn-paste-col {
   animation: pulse-portable 2.5s ease-in-out infinite;
 }
 
+
+/* ============================================================
+   Floating Quick-Copy FAB
+   ============================================================ */
+
+@keyframes fab-slide-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+@keyframes fab-slide-out {
+  from { opacity: 1; transform: translateY(0)    scale(1);    }
+  to   { opacity: 0; transform: translateY(20px) scale(0.92); }
+}
+
+.fab-quick-copy {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgba(14, 18, 30, 0.92);
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  border-radius: 50px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 242, 254, 0.08),
+    0 0 20px rgba(0, 242, 254, 0.12);
+  animation: fab-slide-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  max-width: 380px;
+  overflow: hidden;
+}
+
+.fab-quick-copy.hiding {
+  animation: fab-slide-out 0.25s ease-in forwards;
+}
+
+/* Preview text area */
+.fab-preview {
+  padding: 10px 16px;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Copy button */
+.fab-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: rgba(0, 242, 254, 0.08);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--text-highlight);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.fab-copy-btn:hover {
+  background: rgba(0, 242, 254, 0.18);
+  color: #fff;
+}
+
+.fab-copy-btn:active {
+  background: rgba(0, 242, 254, 0.28);
+  transform: scale(0.97);
+}
+
+.fab-copy-btn .fab-icon {
+  font-size: 1rem;
+}
+
+.fab-copy-btn.copied {
+  background: rgba(67, 233, 123, 0.18);
+  color: #43e97b;
+}
+
+/* Close button */
+.fab-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px 14px 8px 6px;
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.fab-close-btn:hover {
+  color: var(--text-main);
+}
+
+@media (max-width: 600px) {
+  .fab-quick-copy {
+    bottom: 16px;
+    right: 16px;
+    max-width: calc(100vw - 32px);
+  }
+  .fab-preview {
+    max-width: 120px;
+  }
+}

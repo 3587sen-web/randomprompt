@@ -188,6 +188,16 @@
   <!-- Toast System Container -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- Floating Quick-Copy FAB (appears after generation) -->
+  <div id="fabQuickCopy" class="fab-quick-copy" style="display:none;">
+    <div class="fab-preview" id="fabPreviewText"></div>
+    <button class="fab-copy-btn" id="fabCopyBtn" title="複製生成的提示詞">
+      <span class="fab-icon">📋</span>
+      <span class="fab-label">複製</span>
+    </button>
+    <button class="fab-close-btn" id="fabCloseBtn" title="關閉">×</button>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
