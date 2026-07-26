@@ -1626,12 +1626,18 @@ function renderColumnsGrid() {
       removeColumn(index);
     });
     
+    // Controls row: pin + copy + cut + toggle  (remove btn stays absolute)
+    const controlsRow = document.createElement("div");
+    controlsRow.className = "col-card-controls";
+
+    controlsRow.appendChild(pinBtn);
+    controlsRow.appendChild(copyColBtn);
+    controlsRow.appendChild(cutColBtn);
+    controlsRow.appendChild(toggleLabel);
+
     header.appendChild(titleContainer);
-    header.appendChild(pinBtn);
-    header.appendChild(copyColBtn);
-    header.appendChild(cutColBtn);
-    header.appendChild(toggleLabel);
-    header.appendChild(removeBtn);
+    header.appendChild(controlsRow);
+    header.appendChild(removeBtn);   // stays absolute-positioned
     
     // Textarea section
     const textWrapper = document.createElement("div");

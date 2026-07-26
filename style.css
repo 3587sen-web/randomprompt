@@ -596,11 +596,26 @@ select:focus {
 /* Card Header Controls */
 .col-card-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   position: relative;
   padding-right: 24px; /* Space for the delete button */
+}
+
+/* Title row: drag handle + idx badge + title input */
+.col-card-title-container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Controls row: pin, copy, cut, toggle */
+.col-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 /* Small iOS switch on cards */
@@ -707,12 +722,6 @@ select:focus {
 }
 
 /* Card Input Title */
-.col-card-title-container {
-  flex-grow: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 
 .col-drag-handle {
   color: var(--text-muted);
