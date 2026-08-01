@@ -1331,9 +1331,11 @@ function initElements() {
     btnExportSinglePreset: document.getElementById("btnExportSinglePreset"),
 
     // New features
-    btnResetDefault:    document.getElementById("btnResetDefault"),
-    btnDuplicatePreset: document.getElementById("btnDuplicatePreset"),
-    colJumpSelect:      document.getElementById("colJumpSelect"),
+    btnResetDefault:       document.getElementById("btnResetDefault"),
+    btnDuplicatePreset:    document.getElementById("btnDuplicatePreset"),
+    colJumpSelect:         document.getElementById("colJumpSelect"),
+    btnToggleAllActive:    document.getElementById("btnToggleAllActive"),
+    btnToggleAllNoRepeat:  document.getElementById("btnToggleAllNoRepeat"),
 
     // FAB quick copy
     fabQuickCopy:  document.getElementById("fabQuickCopy"),
@@ -1368,6 +1370,14 @@ function bindGlobalEvents() {
   elements.btnResetDefault.addEventListener("click", resetToDefault);
   elements.btnEmptyContent.addEventListener("click", emptyAllContents);
   elements.btnClearTitles.addEventListener("click", clearAllTitles);
+  
+  // Header Quick Column Toggles
+  if (elements.btnToggleAllActive) {
+    elements.btnToggleAllActive.addEventListener("click", toggleAllActive);
+  }
+  if (elements.btnToggleAllNoRepeat) {
+    elements.btnToggleAllNoRepeat.addEventListener("click", toggleAllNoRepeat);
+  }
   
   // Settings switches
   elements.toggleTitles.addEventListener("change", (e) => {
@@ -1466,6 +1476,19 @@ function updateHeaderStates() {
   
   const activeCount = state.columns.filter(c => c.active).length;
   elements.activeColsBadge.textContent = `${activeCount} 個啟用`;
+
+  // Update header toggle buttons active class
+  const allActive = state.columns.length > 0 && state.columns.every(c => c.active);
+  if (elements.btnToggleAllActive) {
+    elements.btnToggleAllActive.classList.toggle("active", allActive);
+    elements.btnToggleAllActive.title = allActive ? "一鍵停用所有欄位" : "一鍵啟用所有欄位";
+  }
+
+  const allNoRepeat = state.columns.length > 0 && state.columns.every(c => c.noRepeat);
+  if (elements.btnToggleAllNoRepeat) {
+    elements.btnToggleAllNoRepeat.classList.toggle("active", allNoRepeat);
+    elements.btnToggleAllNoRepeat.title = allNoRepeat ? "一鍵關閉所有欄位不重複模式" : "一鍵開啟所有欄位不重複模式";
+  }
 }
 
 // Render column cards dynamically
@@ -2058,6 +2081,51 @@ function setColCount(count) {
 
 function adjustColCount(amount) {
   setColCount(state.columnCount + amount);
+}
+
+// ---------------------------------
+// Toggle All Active & No-Repeat
+// ---------------------------------
+
+function toggleAllActive() {
+  if (state.columns.length === 0) return;
+  const hasInactive = state.columns.some(c => !c.active);
+  const targetActive = hasInactive;
+
+  state.columns.forEach(c => {
+    c.active = targetActive;
+  });
+
+  saveStateToStorage();
+  renderAll();
+  autoGenerate();
+
+  showToast(
+    targetActive ? "⚡ 已啟用所有欄位" : "⚡ 已停用所有欄位",
+    targetActive ? "success" : "info"
+  );
+}
+
+function toggleAllNoRepeat() {
+  if (state.columns.length === 0) return;
+  const hasDisabledNoRepeat = state.columns.some(c => !c.noRepeat);
+  const targetNoRepeat = hasDisabledNoRepeat;
+
+  state.columns.forEach(c => {
+    c.noRepeat = targetNoRepeat;
+    if (!targetNoRepeat) {
+      c.usedValues = [];
+    }
+  });
+
+  saveStateToStorage();
+  renderAll();
+  autoGenerate();
+
+  showToast(
+    targetNoRepeat ? "♻️ 已開啟所有欄位的不重複模式" : "♻️ 已關閉所有欄位的不重複模式",
+    targetNoRepeat ? "success" : "info"
+  );
 }
 
 // ---------------------------------

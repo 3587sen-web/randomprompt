@@ -504,6 +504,50 @@ select:focus {
   flex-wrap: wrap;
 }
 
+/* Section Header Quick Action Toggle Buttons */
+.btn-hdr-toggle {
+  background: rgba(10, 12, 20, 0.6);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.btn-hdr-toggle:hover {
+  border-color: rgba(0, 242, 254, 0.35);
+  color: var(--text-main);
+  background-color: rgba(0, 242, 254, 0.06);
+  transform: translateY(-1px);
+}
+
+.btn-hdr-toggle:active {
+  transform: translateY(0);
+}
+
+#btnToggleAllActive.active {
+  background: rgba(0, 242, 254, 0.12);
+  border-color: rgba(0, 242, 254, 0.4);
+  color: var(--text-highlight);
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.18);
+}
+
+#btnToggleAllNoRepeat.active {
+  background: rgba(67, 233, 123, 0.12);
+  border-color: rgba(67, 233, 123, 0.4);
+  color: #43e97b;
+  box-shadow: 0 0 10px rgba(67, 233, 123, 0.18);
+}
+
 /* Column Jump Navigation Dropdown */
 .col-jump-select {
   background: rgba(10, 12, 20, 0.6);
