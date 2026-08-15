@@ -1877,9 +1877,11 @@ function renderColumnsGrid() {
     categoryInput.placeholder = "🗂️ 分類（未填＝未分類）";
     categoryInput.setAttribute("list", "categoryDatalist");
     categoryInput.title = "輸入分類名稱以建立頁籤，同名分類會自動歸為同一頁籤";
-    categoryInput.addEventListener("change", (e) => {
+    categoryInput.addEventListener("input", (e) => {
       col.category = e.target.value.trim();
       saveStateToStorage();
+    });
+    categoryInput.addEventListener("change", () => {
       renderAll();
       autoGenerate();
     });
@@ -1899,10 +1901,12 @@ function renderColumnsGrid() {
     priorityInput.className = "col-priority-input";
     priorityInput.type = "number";
     priorityInput.value = col.priority || 0;
-    priorityInput.addEventListener("change", (e) => {
+    priorityInput.addEventListener("input", (e) => {
       const val = parseInt(e.target.value);
       col.priority = isNaN(val) ? 0 : val;
       saveStateToStorage();
+    });
+    priorityInput.addEventListener("change", () => {
       renderAll();
       autoGenerate();
     });
