@@ -2285,7 +2285,7 @@ function renderAlwaysTagsList() {
 // ---------------------------------
 
 function setColCount(count) {
-  let target = Math.max(2, Math.min(99, count));
+  let target = Math.max(2, Math.min(500, count));
   state.columnCount = target;
   
   // Adjust columns array size
@@ -2411,8 +2411,8 @@ function pasteColumnAfter(index) {
     showToast("剪貼簿是空的，請先複製或剪下一個欄位", "error");
     return;
   }
-  if (state.columnCount >= 99) {
-    showToast("已達最高欄位上限 99 個", "error");
+  if (state.columnCount >= 500) {
+    showToast("已達最高欄位上限 500 個", "error");
     return;
   }
   const newCol = {
@@ -2545,8 +2545,8 @@ function adjustGenCount(amount) {
 // ---------------------------------
 
 function insertColumnAfter(index) {
-  if (state.columnCount >= 99) {
-    showToast("已達最高欄位上限 99 個", "error");
+  if (state.columnCount >= 500) {
+    showToast("已達最高欄位上限 500 個", "error");
     return;
   }
   const newCol = {
@@ -2619,8 +2619,8 @@ function exportSinglePreset() {
 }
 
 function addNewColumn() {
-  if (state.columnCount >= 99) {
-    showToast("已達最高欄位上限 99 個", "error");
+  if (state.columnCount >= 500) {
+    showToast("已達最高欄位上限 500 個", "error");
     return;
   }
   setColCount(state.columnCount + 1);
