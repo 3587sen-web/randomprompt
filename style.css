@@ -593,6 +593,76 @@ select:focus {
   border: 1px solid rgba(0, 242, 254, 0.2);
 }
 
+.badge-selection {
+  background: rgba(126, 0, 255, 0.12);
+  color: #c084fc;
+  border-color: rgba(126, 0, 255, 0.3);
+  align-items: center;
+  gap: 4px;
+}
+
+/* Category Tabs Bar */
+.category-tabs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 2px;
+}
+
+.category-tab {
+  background: rgba(10, 12, 20, 0.5);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.category-tab:hover {
+  border-color: rgba(0, 242, 254, 0.35);
+  color: var(--text-main);
+  background: rgba(0, 242, 254, 0.06);
+  transform: translateY(-1px);
+}
+
+.category-tab.active {
+  background: rgba(0, 242, 254, 0.14);
+  border-color: rgba(0, 242, 254, 0.5);
+  color: var(--text-highlight);
+  box-shadow: var(--shadow-glow);
+}
+
+.category-tab-count {
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 0.68rem;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.category-tab.active .category-tab-count {
+  background: rgba(0, 242, 254, 0.22);
+}
+
+.category-empty-msg {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+}
+
 .columns-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -635,6 +705,20 @@ select:focus {
   border-style: dashed;
   box-shadow: none;
   transform: scale(0.98);
+}
+
+.col-card.selected {
+  border-color: #c084fc;
+  box-shadow: 0 0 0 1px #c084fc, 0 0 14px rgba(126, 0, 255, 0.25);
+}
+
+/* Drop position indicators for (multi-select aware) drag & drop */
+.col-card.drop-indicator-before {
+  box-shadow: inset 4px 0 0 0 var(--text-highlight);
+}
+
+.col-card.drop-indicator-after {
+  box-shadow: inset -4px 0 0 0 var(--text-highlight);
 }
 
 /* Card Header Controls */
@@ -836,6 +920,81 @@ select:focus {
 
 .col-card.active .col-title-input {
   color: var(--text-highlight);
+}
+
+/* Multi-select checkbox */
+.col-select-checkbox {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  accent-color: var(--text-highlight);
+  cursor: pointer;
+}
+
+/* Category + Priority meta row */
+.col-card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.col-category-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(10, 12, 20, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-family: var(--font-text);
+  padding: 4px 10px;
+  outline: none;
+  transition: var(--transition-fast);
+}
+
+.col-category-input:focus {
+  border-color: rgba(0, 242, 254, 0.4);
+  color: var(--text-main);
+  background: rgba(10, 12, 20, 0.7);
+}
+
+.col-category-input::placeholder {
+  color: rgba(156, 163, 175, 0.55);
+}
+
+.col-priority-wrap {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  background: rgba(10, 12, 20, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 2px 8px 2px 6px;
+}
+
+.col-priority-label {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+.col-priority-input {
+  width: 34px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.72rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.col-priority-input::-webkit-outer-spin-button,
+.col-priority-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* Textarea styling */

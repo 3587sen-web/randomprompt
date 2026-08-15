@@ -117,8 +117,14 @@
             <option value="">🔍 跳轉至欄位...</option>
           </select>
           <span class="badge" id="activeColsBadge">0 個啟用</span>
+          <span class="badge badge-selection" id="selectedColsBadge" style="display:none;">已選取 0 個</span>
+          <button type="button" class="btn-hdr-toggle" id="btnClearSelection" style="display:none;" title="取消所有多選">✕ 取消選取</button>
         </div>
       </div>
+      <div class="category-tabs-bar" id="categoryTabsBar">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+      <datalist id="categoryDatalist"></datalist>
       <div class="columns-grid" id="columnsGrid">
         <!-- Rendered dynamically by app.js -->
       </div>

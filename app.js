@@ -1263,8 +1263,106 @@ const STORAGE_PREFIX = "aura_pg_";
 // Modal Promises Resolvers
 let modalResolver = null;
 let modalHideTimeout = null;  // tracks the 250ms hide timer to prevent race conditions
-let draggedCard = null;
 let alwaysDraggedRow = null;  // tracks dragged always-tag row
+
+// Currently selected category tab ("__all__" = show every column)
+let activeCategoryTab = "__all__";
+const UNCATEGORIZED_LABEL = "未分類";
+
+// Multi-select for group drag reordering
+let selectedColumnIds = new Set();
+let dragGroupIds = null;   // ids currently being dragged (1 or many)
+let dropTarget = null;     // { colId, position: 'before' | 'after' }
+
+// Ensure a column object has category/priority fields (for old/imported data)
+function ensureColumnDefaults(col) {
+  if (typeof col.category !== "string") col.category = "";
+  if (typeof col.priority !== "number" || isNaN(col.priority)) col.priority = 0;
+  return col;
+}
+
+// Unique list of categories currently in use, in first-appearance order
+function getCategoryList() {
+  const seen = [];
+  state.columns.forEach(col => {
+    const cat = col.category || "";
+    if (!seen.includes(cat)) seen.push(cat);
+  });
+  return seen;
+}
+
+// Columns to display for the active tab, sorted by priority (highest first)
+function getVisibleSortedColumns() {
+  const filtered = activeCategoryTab === "__all__"
+    ? state.columns.slice()
+    : state.columns.filter(c => (c.category || "") === activeCategoryTab);
+
+  return filtered
+    .map((col, i) => ({ col, i }))
+    .sort((a, b) => (b.col.priority || 0) - (a.col.priority || 0) || a.i - b.i)
+    .map(x => x.col);
+}
+
+// Reassign priority values so that `orderedCols` (top-to-bottom) sorts back
+// into that same order next render. Only touches columns in the current view.
+function reassignPriorityFromOrder(orderedCols) {
+  const n = orderedCols.length;
+  orderedCols.forEach((col, i) => {
+    col.priority = n - i;
+  });
+}
+
+// Compute the final order after dropping the dragged group next to dropTarget,
+// then convert that order into priority values.
+function finalizeGroupDrop() {
+  if (!dragGroupIds || !dropTarget) {
+    dragGroupIds = null;
+    dropTarget = null;
+    return;
+  }
+  if (dragGroupIds.includes(dropTarget.colId)) {
+    // Dropped onto a member of its own group - no-op
+    dragGroupIds = null;
+    dropTarget = null;
+    return;
+  }
+
+  const view = getVisibleSortedColumns();
+  const groupSet = new Set(dragGroupIds);
+
+  // Preserve the dragged items' relative order as they currently appear
+  const groupCols = view.filter(c => groupSet.has(c.id));
+  const remaining = view.filter(c => !groupSet.has(c.id));
+
+  const targetIdx = remaining.findIndex(c => c.id === dropTarget.colId);
+  if (targetIdx === -1) {
+    dragGroupIds = null;
+    dropTarget = null;
+    return;
+  }
+  const insertIdx = dropTarget.position === "before" ? targetIdx : targetIdx + 1;
+
+  remaining.splice(insertIdx, 0, ...groupCols);
+  reassignPriorityFromOrder(remaining);
+
+  saveStateToStorage();
+  dragGroupIds = null;
+  dropTarget = null;
+  renderAll();
+  autoGenerate();
+}
+
+// Update the "N selected" badge + clear-selection button visibility
+function updateSelectionBadge() {
+  const count = selectedColumnIds.size;
+  if (elements.selectedColsBadge) {
+    elements.selectedColsBadge.style.display = count > 0 ? "inline-flex" : "none";
+    elements.selectedColsBadge.textContent = `已選取 ${count} 個`;
+  }
+  if (elements.btnClearSelection) {
+    elements.btnClearSelection.style.display = count > 0 ? "inline-flex" : "none";
+  }
+}
 
 // Initialize Elements
 document.addEventListener("DOMContentLoaded", () => {
@@ -1303,7 +1401,11 @@ function initElements() {
     importFileInput: document.getElementById("importFileInput"),
     btnDeletePreset: document.getElementById("btnDeletePreset"),
     activeColsBadge: document.getElementById("activeColsBadge"),
+    selectedColsBadge: document.getElementById("selectedColsBadge"),
+    btnClearSelection: document.getElementById("btnClearSelection"),
     columnsGrid: document.getElementById("columnsGrid"),
+    categoryTabsBar: document.getElementById("categoryTabsBar"),
+    categoryDatalist: document.getElementById("categoryDatalist"),
     alwaysTagsGrid: document.getElementById("alwaysTagsGrid"),
     btnAddAlwaysTag: document.getElementById("btnAddAlwaysTag"),
     btnGenerate: document.getElementById("btnGenerate"),
@@ -1377,6 +1479,13 @@ function bindGlobalEvents() {
   }
   if (elements.btnToggleAllNoRepeat) {
     elements.btnToggleAllNoRepeat.addEventListener("click", toggleAllNoRepeat);
+  }
+  if (elements.btnClearSelection) {
+    elements.btnClearSelection.addEventListener("click", () => {
+      selectedColumnIds.clear();
+      renderColumnsGrid();
+      updateSelectionBadge();
+    });
   }
   
   // Settings switches
@@ -1461,11 +1570,65 @@ function bindGlobalEvents() {
 // ---------------------------------
 
 function renderAll() {
+  state.columns.forEach(ensureColumnDefaults);
+  renderCategoryTabs();
   renderColumnsGrid();
   renderAlwaysTagsList();
   renderPresetsDropdown();
   updateHeaderStates();
   updateColumnJumpSelect();
+}
+
+// Render the category tab bar above the columns grid
+function renderCategoryTabs() {
+  if (!elements.categoryTabsBar) return;
+  elements.categoryTabsBar.innerHTML = "";
+
+  const categories = getCategoryList();
+
+  // If nobody has used categories yet, hide the bar entirely (no clutter)
+  if (categories.length <= 1 && categories[0] === "" ) {
+    elements.categoryTabsBar.style.display = "none";
+  } else {
+    elements.categoryTabsBar.style.display = "flex";
+  }
+
+  // Keep activeCategoryTab valid (category may have been renamed/removed)
+  if (activeCategoryTab !== "__all__" && !categories.includes(activeCategoryTab)) {
+    activeCategoryTab = "__all__";
+  }
+
+  const makeTab = (value, label, count) => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = `category-tab ${activeCategoryTab === value ? "active" : ""}`;
+    tab.innerHTML = `${label} <span class="category-tab-count">${count}</span>`;
+    tab.addEventListener("click", () => {
+      activeCategoryTab = value;
+      selectedColumnIds.clear();
+      renderCategoryTabs();
+      renderColumnsGrid();
+      updateSelectionBadge();
+    });
+    return tab;
+  };
+
+  elements.categoryTabsBar.appendChild(makeTab("__all__", "🗂️ 全部", state.columns.length));
+
+  categories.forEach(cat => {
+    const count = state.columns.filter(c => (c.category || "") === cat).length;
+    elements.categoryTabsBar.appendChild(makeTab(cat, cat === "" ? UNCATEGORIZED_LABEL : cat, count));
+  });
+
+  // Keep the category datalist (used by each card's category input) in sync
+  if (elements.categoryDatalist) {
+    elements.categoryDatalist.innerHTML = "";
+    categories.filter(c => c !== "").forEach(cat => {
+      const opt = document.createElement("option");
+      opt.value = cat;
+      elements.categoryDatalist.appendChild(opt);
+    });
+  }
 }
 
 function updateHeaderStates() {
@@ -1494,70 +1657,65 @@ function updateHeaderStates() {
 // Render column cards dynamically
 function renderColumnsGrid() {
   elements.columnsGrid.innerHTML = "";
-  
-  state.columns.forEach((col, index) => {
+
+  const visibleColumns = getVisibleSortedColumns();
+
+  if (activeCategoryTab !== "__all__" && visibleColumns.length === 0) {
+    const emptyMsg = document.createElement("div");
+    emptyMsg.className = "category-empty-msg";
+    emptyMsg.textContent = "此分類目前沒有欄位，可在下方欄位中設定分類將其移入。";
+    elements.columnsGrid.appendChild(emptyMsg);
+    updateSelectionBadge();
+    return;
+  }
+
+  visibleColumns.forEach((col, index) => {
     const card = document.createElement("div");
-    card.className = `col-card ${col.active ? 'active' : 'inactive'}`;
+    card.className = `col-card ${col.active ? 'active' : 'inactive'} ${selectedColumnIds.has(col.id) ? 'selected' : ''}`;
     card.setAttribute("data-id", col.id);
     
-    // Drag and Drop event listeners on card
+    // Drag and Drop event listeners on card (supports dragging a multi-selection as a group)
     card.addEventListener("dragstart", (e) => {
-      draggedCard = card;
+      const ids = (selectedColumnIds.has(col.id) && selectedColumnIds.size > 1)
+        ? Array.from(selectedColumnIds)
+        : [col.id];
+      dragGroupIds = ids;
+      dropTarget = null;
       e.dataTransfer.effectAllowed = "move";
       setTimeout(() => {
-        card.classList.add("dragging");
+        ids.forEach(id => {
+          const el = elements.columnsGrid.querySelector(`[data-id="${id}"]`);
+          if (el) el.classList.add("dragging");
+        });
       }, 0);
     });
     
     card.addEventListener("dragover", (e) => {
       e.preventDefault();
-      if (!draggedCard || draggedCard === card) return;
+      if (!dragGroupIds || dragGroupIds.includes(col.id)) return;
+      
+      elements.columnsGrid.querySelectorAll(".drop-indicator-before, .drop-indicator-after")
+        .forEach(el => el.classList.remove("drop-indicator-before", "drop-indicator-after"));
       
       const rect = card.getBoundingClientRect();
-      const relX = e.clientX - rect.left;
-      const relY = e.clientY - rect.top;
-      
-      const children = Array.from(card.parentNode.children);
-      const draggedIndex = children.indexOf(draggedCard);
-      const targetIndex = children.indexOf(card);
-      
-      if (draggedIndex < targetIndex) {
-        // Dragging to the right / down
-        if (relX > rect.width / 2 || relY > rect.height / 2) {
-          card.parentNode.insertBefore(draggedCard, card.nextSibling);
-          updateIndexBadges();
-        }
-      } else if (draggedIndex > targetIndex) {
-        // Dragging to the left / up
-        if (relX < rect.width / 2 || relY < rect.height / 2) {
-          card.parentNode.insertBefore(draggedCard, card);
-          updateIndexBadges();
-        }
-      }
+      const isBefore = (e.clientX - rect.left) < rect.width / 2;
+      dropTarget = { colId: col.id, position: isBefore ? "before" : "after" };
+      card.classList.add(isBefore ? "drop-indicator-before" : "drop-indicator-after");
+    });
+    
+    card.addEventListener("drop", (e) => {
+      e.preventDefault();
+      finalizeGroupDrop();
     });
     
     card.addEventListener("dragend", () => {
-      card.classList.remove("dragging");
       card.setAttribute("draggable", "false");
-      draggedCard = null;
-      
-      // Re-build state.columns order based on current DOM order
-      const newColumns = [];
-      const currentCards = elements.columnsGrid.querySelectorAll(".col-card");
-      currentCards.forEach((cardEl) => {
-        const colId = parseInt(cardEl.getAttribute("data-id"));
-        const colObj = state.columns.find(c => c.id === colId);
-        if (colObj) {
-          newColumns.push(colObj);
-        }
-      });
-      
-      state.columns = newColumns;
-      saveStateToStorage();
-      
-      // Re-render to ensure everything matches
-      renderAll();
-      autoGenerate();
+      elements.columnsGrid.querySelectorAll(".dragging")
+        .forEach(el => el.classList.remove("dragging"));
+      elements.columnsGrid.querySelectorAll(".drop-indicator-before, .drop-indicator-after")
+        .forEach(el => el.classList.remove("drop-indicator-before", "drop-indicator-after"));
+      dragGroupIds = null;
+      dropTarget = null;
     });
     
     // Header section
@@ -1566,6 +1724,24 @@ function renderColumnsGrid() {
     
     const titleContainer = document.createElement("div");
     titleContainer.className = "col-card-title-container";
+    
+    // Multi-select checkbox (for group drag reordering / bulk actions)
+    const selectCheckbox = document.createElement("input");
+    selectCheckbox.type = "checkbox";
+    selectCheckbox.className = "col-select-checkbox";
+    selectCheckbox.title = "勾選以多選欄位（可一起拖曳排序）";
+    selectCheckbox.checked = selectedColumnIds.has(col.id);
+    selectCheckbox.addEventListener("click", (e) => e.stopPropagation());
+    selectCheckbox.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        selectedColumnIds.add(col.id);
+        card.classList.add("selected");
+      } else {
+        selectedColumnIds.delete(col.id);
+        card.classList.remove("selected");
+      }
+      updateSelectionBadge();
+    });
     
     // Drag Handle
     const dragHandle = document.createElement("div");
@@ -1582,22 +1758,28 @@ function renderColumnsGrid() {
     const idxBadge = document.createElement("div");
     idxBadge.className = "col-idx-badge";
     idxBadge.textContent = index + 1;
-    idxBadge.title = `點擊輸入目標位置號碼快速移動（目前第 ${index + 1} 欄）`;
+    idxBadge.title = `點擊輸入目標順位快速移動（目前第 ${index + 1} 位，依優先權排序）`;
     idxBadge.addEventListener("click", async () => {
-      const currentIdx = state.columns.indexOf(col);
-      const total = state.columns.length;
+      const total = visibleColumns.length;
+      const currentPos = visibleColumns.indexOf(col) + 1;
       const newPosStr = await showCustomPrompt(
-        "移動欄位位置",
-        `目前位置：第 ${currentIdx + 1} 欄「${col.title || '未命名'}」\n請輸入目標位置（1–${total}）：`,
-        String(currentIdx + 1)
+        "調整顯示順位",
+        `目前順位：第 ${currentPos} 位「${col.title || '未命名'}」\n請輸入目標順位（1–${total}），數字越前面代表優先權越高：`,
+        String(currentPos)
       );
       if (newPosStr === null || newPosStr.trim() === "") return;
       const newPos = parseInt(newPosStr);
       if (isNaN(newPos) || newPos < 1 || newPos > total) {
-        showToast(`請輸入有效的位置（1–${total}）`, "error");
+        showToast(`請輸入有效的順位（1–${total}）`, "error");
         return;
       }
-      moveColumnToPosition(currentIdx, newPos - 1);
+      const reordered = visibleColumns.slice();
+      const [moved] = reordered.splice(currentPos - 1, 1);
+      reordered.splice(newPos - 1, 0, moved);
+      reassignPriorityFromOrder(reordered);
+      saveStateToStorage();
+      renderAll();
+      autoGenerate();
     });
     
     const titleInput = document.createElement("input");
@@ -1611,6 +1793,7 @@ function renderColumnsGrid() {
       autoGenerate();
     });
     
+    titleContainer.appendChild(selectCheckbox);
     titleContainer.appendChild(dragHandle);
     titleContainer.appendChild(idxBadge);
     titleContainer.appendChild(titleInput);
@@ -1667,7 +1850,7 @@ function renderColumnsGrid() {
     removeBtn.innerHTML = "&times;";
     removeBtn.title = "刪除此欄位";
     removeBtn.addEventListener("click", () => {
-      removeColumn(index);
+      removeColumn(state.columns.indexOf(col));
     });
     
     // Controls row: pin + copy + cut + toggle  (remove btn stays absolute)
@@ -1682,6 +1865,54 @@ function renderColumnsGrid() {
     header.appendChild(titleContainer);
     header.appendChild(controlsRow);
     header.appendChild(removeBtn);   // stays absolute-positioned
+
+    // Category + Priority row
+    const metaRow = document.createElement("div");
+    metaRow.className = "col-card-meta-row";
+
+    const categoryInput = document.createElement("input");
+    categoryInput.className = "col-category-input";
+    categoryInput.type = "text";
+    categoryInput.value = col.category || "";
+    categoryInput.placeholder = "🗂️ 分類（未填＝未分類）";
+    categoryInput.setAttribute("list", "categoryDatalist");
+    categoryInput.title = "輸入分類名稱以建立頁籤，同名分類會自動歸為同一頁籤";
+    categoryInput.addEventListener("change", (e) => {
+      col.category = e.target.value.trim();
+      saveStateToStorage();
+      renderAll();
+      autoGenerate();
+    });
+    categoryInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") categoryInput.blur();
+    });
+
+    const priorityWrap = document.createElement("div");
+    priorityWrap.className = "col-priority-wrap";
+    priorityWrap.title = "優先權數字越大，在頁籤中排越前面";
+
+    const priorityLabel = document.createElement("span");
+    priorityLabel.className = "col-priority-label";
+    priorityLabel.textContent = "⭐";
+
+    const priorityInput = document.createElement("input");
+    priorityInput.className = "col-priority-input";
+    priorityInput.type = "number";
+    priorityInput.value = col.priority || 0;
+    priorityInput.addEventListener("change", (e) => {
+      const val = parseInt(e.target.value);
+      col.priority = isNaN(val) ? 0 : val;
+      saveStateToStorage();
+      renderAll();
+      autoGenerate();
+    });
+
+    priorityWrap.appendChild(priorityLabel);
+    priorityWrap.appendChild(priorityInput);
+
+    metaRow.appendChild(categoryInput);
+    metaRow.appendChild(priorityWrap);
+    header.appendChild(metaRow);
     
     // Textarea section
     const textWrapper = document.createElement("div");
@@ -1818,6 +2049,8 @@ function renderColumnsGrid() {
     elements.columnsGrid.appendChild(card);
     updateLinesCounter(card, col.content);
   });
+
+  updateSelectionBadge();
 }
 
 function updateLinesCounter(cardElement, content) {
@@ -2061,7 +2294,9 @@ function setColCount(count) {
         title: "",
         content: "",
         active: true,
-        lockedValue: null
+        lockedValue: null,
+        category: activeCategoryTab === "__all__" ? "" : activeCategoryTab,
+        priority: 0
       });
     }
   } else if (state.columns.length > target) {
@@ -2152,12 +2387,12 @@ function clearClipboard() {
 }
 
 function copyColumn(col) {
-  setClipboard({ title: col.title, content: col.content });
+  setClipboard({ title: col.title, content: col.content, category: col.category || "", priority: col.priority || 0 });
   showToast(`📋 已複製欄位「${col.title || '（無標題）'}」`, "success");
 }
 
 function cutColumn(col) {
-  setClipboard({ title: col.title, content: col.content });
+  setClipboard({ title: col.title, content: col.content, category: col.category || "", priority: col.priority || 0 });
   col.title   = "";
   col.content = "";
   col.lockedValue = null;
@@ -2183,7 +2418,9 @@ function pasteColumnAfter(index) {
     active: true,
     lockedValue: null,
     noRepeat: false,
-    usedValues: []
+    usedValues: [],
+    category: clip.category || "",
+    priority: clip.priority || 0
   };
   state.columns.splice(index + 1, 0, newCol);
   state.columnCount = state.columns.length;
@@ -2214,9 +2451,12 @@ async function resetToDefault() {
       active: true,
       lockedValue: null,
       noRepeat: false,
-      usedValues: []
+      usedValues: [],
+      category: "",
+      priority: 0
     });
   }
+  activeCategoryTab = "__all__";
   state.columnCount = 5;
   saveStateToStorage();
   renderAll();
@@ -2310,7 +2550,9 @@ function insertColumnAfter(index) {
     title: "",
     content: "",
     active: true,
-    lockedValue: null
+    lockedValue: null,
+    category: activeCategoryTab === "__all__" ? "" : activeCategoryTab,
+    priority: 0
   };
   state.columns.splice(index + 1, 0, newCol);
   state.columnCount = state.columns.length;
@@ -2401,6 +2643,7 @@ async function removeColumn(index) {
   // Remove
   state.columns.splice(index, 1);
   state.columnCount = state.columns.length;
+  selectedColumnIds.delete(col.id);
   
   saveStateToStorage();
   renderAll();
@@ -2488,9 +2731,12 @@ async function prefillDefault() {
       id: Date.now() + i * 10,
       title: DEFAULT_TITLES[i - 1],
       content: DEFAULT_CONTENTS[i] || "",
-      active: true
+      active: true,
+      category: "",
+      priority: 0
     });
   }
+  activeCategoryTab = "__all__";
   
   // Fill default always tags
   state.alwaysTags = [
@@ -2936,7 +3182,9 @@ function saveStateToStorage() {
       title: col.title,
       content: col.content,
       active: col.active,
-      lockedValue: col.lockedValue || null
+      lockedValue: col.lockedValue || null,
+      category: col.category || "",
+      priority: typeof col.priority === "number" ? col.priority : 0
     })),
     alwaysTags: state.alwaysTags.map(tag => ({
       id: tag.id,
@@ -2966,6 +3214,7 @@ function loadStateFromStorage() {
     state.columnCount = data.columnCount || 12;
     state.generateCount = data.generateCount || 1;
     state.columns = data.columns || [];
+    state.columns.forEach(ensureColumnDefaults);
     state.alwaysTags = data.alwaysTags || [];
     if (data.settings) {
       state.settings.useTitles = data.settings.useTitles !== false;
@@ -2986,9 +3235,12 @@ function prefillDefaultOnFirstLoad() {
       id: Date.now() + i * 10,
       title: DEFAULT_TITLES[i - 1],
       content: DEFAULT_CONTENTS[i] || "",
-      active: true
+      active: true,
+      category: "",
+      priority: 0
     });
   }
+  activeCategoryTab = "__all__";
   state.alwaysTags = [
     {
       id: Date.now() + 100,
@@ -3065,7 +3317,9 @@ async function saveCurrentPreset() {
       title: col.title,
       content: col.content,
       active: col.active,
-      lockedValue: col.lockedValue || null
+      lockedValue: col.lockedValue || null,
+      category: col.category || "",
+      priority: typeof col.priority === "number" ? col.priority : 0
     })),
     alwaysTags: state.alwaysTags.map(tag => ({
       text: tag.text,
@@ -3125,7 +3379,9 @@ function loadPresetData(data) {
       title: col.title || "",
       content: col.content || "",
       active: col.active !== false,
-      lockedValue: col.lockedValue || null
+      lockedValue: col.lockedValue || null,
+      category: col.category || "",
+      priority: typeof col.priority === "number" ? col.priority : 0
     }));
     
     // Restore Always tags
@@ -3155,6 +3411,7 @@ function loadPresetData(data) {
     }
   }
   
+  activeCategoryTab = "__all__";
   saveStateToStorage();
   renderAll();
 }
@@ -3177,7 +3434,9 @@ function migrateOldPresetFormat(oldData) {
       id: Date.now() + i * 10,
       title: colTitles[i] || "",
       content: colContents[i] || "",
-      active: true
+      active: true,
+      category: "",
+      priority: 0
     });
   }
   
