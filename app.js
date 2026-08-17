@@ -2783,6 +2783,7 @@ function generatePrompt(shouldAnimate = true) {
   const genCount = state.generateCount || 1;
   const generatedPrompts = [];
   const selectionsList = [];
+  const resetNoticeShownFor = new Set(); // avoid spamming the same "cycled" toast within one batch
 
   for (let i = 0; i < genCount; i++) {
     let activeSegments = []; // array of { colIndex, originalIdx, label, pickText }
@@ -2811,16 +2812,14 @@ function generatePrompt(shouldAnimate = true) {
           // All used — reset and cycle
           col.usedValues = [];
           available = lines;
-          if (i === 0) {
+          if (!resetNoticeShownFor.has(col.id)) {
+            resetNoticeShownFor.add(col.id);
             showToast(`♻️ 「${col.title || '欄位'}」 已全部抽完，重新從頭循環`, "info");
           }
         }
         selectedLine = available[Math.floor(Math.random() * available.length)];
-        if (i === 0) {
-          if (!col.usedValues) col.usedValues = [];
-          col.usedValues.push(selectedLine);
-          saveStateToStorage(); // persist used list
-        }
+        if (!col.usedValues) col.usedValues = [];
+        col.usedValues.push(selectedLine);
       } else {
         selectedLine = lines[Math.floor(Math.random() * lines.length)];
       }
@@ -2964,6 +2963,9 @@ function generatePrompt(shouldAnimate = true) {
     const finalPromptText = outputList.join(separator);
     generatedPrompts.push(finalPromptText);
   }
+
+  // Persist noRepeat usedValues (and lastSelectedValue) updated during this batch
+  saveStateToStorage();
 
   // Capture current selections for JSON export
   window.lastSelectionsList = selectionsList;
