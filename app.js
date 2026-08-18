@@ -1303,6 +1303,16 @@ function getVisibleSortedColumns() {
     .map(x => x.col);
 }
 
+// ALL columns sorted by priority (highest first), ignoring which tab is
+// currently open. Used for prompt generation so the output order always
+// matches the priority order, no matter which category tab you're viewing.
+function getAllColumnsSortedByPriority() {
+  return state.columns
+    .map((col, i) => ({ col, i }))
+    .sort((a, b) => (b.col.priority || 0) - (a.col.priority || 0) || a.i - b.i)
+    .map(x => x.col);
+}
+
 // Reassign priority values so that `orderedCols` (top-to-bottom) sorts back
 // into that same order next render. Only touches columns in the current view.
 function reassignPriorityFromOrder(orderedCols) {
@@ -2788,8 +2798,9 @@ function generatePrompt(shouldAnimate = true) {
   for (let i = 0; i < genCount; i++) {
     let activeSegments = []; // array of { colIndex, originalIdx, label, pickText }
     
-    // 1. Gather choices from active columns
-    state.columns.forEach((col, idx) => {
+    // 1. Gather choices from active columns (in priority order, matching the UI)
+    getAllColumnsSortedByPriority().forEach((col) => {
+      const idx = state.columns.indexOf(col);
       if (!col.active) return;
       
       const text = col.content.trim();
