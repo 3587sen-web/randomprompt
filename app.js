@@ -1269,6 +1269,43 @@ let alwaysDraggedRow = null;  // tracks dragged always-tag row
 let activeCategoryTab = "__all__";
 const UNCATEGORIZED_LABEL = "未分類";
 
+// Shared "portal" dropdown for the searchable lock combobox. It's appended
+// directly to <body> (not inside any card) so it always renders on top,
+// regardless of a card's backdrop-filter creating its own stacking context.
+let lockPortalEl = null;
+let lockPortalRepositionHandler = null;
+
+function ensureLockPortal() {
+  if (!lockPortalEl) {
+    lockPortalEl = document.createElement("div");
+    lockPortalEl.className = "col-lock-dropdown col-lock-dropdown-portal";
+    lockPortalEl.style.display = "none";
+    document.body.appendChild(lockPortalEl);
+  }
+  return lockPortalEl;
+}
+
+function positionLockPortal(inputEl) {
+  const portal = ensureLockPortal();
+  const rect = inputEl.getBoundingClientRect();
+  portal.style.position = "fixed";
+  portal.style.left = `${rect.left}px`;
+  portal.style.right = "auto";
+  portal.style.top = `${rect.bottom + 4}px`;
+  portal.style.width = `${rect.width}px`;
+}
+
+function closeLockPortal() {
+  if (!lockPortalEl) return;
+  lockPortalEl.style.display = "none";
+  lockPortalEl.innerHTML = "";
+  if (lockPortalRepositionHandler) {
+    window.removeEventListener("scroll", lockPortalRepositionHandler, true);
+    window.removeEventListener("resize", lockPortalRepositionHandler);
+    lockPortalRepositionHandler = null;
+  }
+}
+
 // Multi-select for group drag reordering
 let selectedColumnIds = new Set();
 let dragGroupIds = null;   // ids currently being dragged (1 or many)
@@ -1666,6 +1703,7 @@ function updateHeaderStates() {
 
 // Render column cards dynamically
 function renderColumnsGrid() {
+  closeLockPortal(); // avoid a stale reference if a re-render happens while it's open
   elements.columnsGrid.innerHTML = "";
 
   const visibleColumns = getVisibleSortedColumns();
@@ -1951,10 +1989,6 @@ function renderColumnsGrid() {
     lockSelect.autocomplete = "off";
     lockSelect.value = col.lockedValue || "";
 
-    const lockDropdown = document.createElement("div");
-    lockDropdown.className = "col-lock-dropdown";
-    lockDropdown.style.display = "none";
-
     const MAX_LOCK_RESULTS = 150;
     const getLockLines = () => col.content.split("\n").map(l => l.trim()).filter(l => l !== "");
 
@@ -1977,18 +2011,21 @@ function renderColumnsGrid() {
         showToast(`📌 已鎖定欄位「${col.title || '未命名'}」的值為: ${val}`, "success");
       }
       lockSelect.value = col.lockedValue || "";
-      lockDropdown.style.display = "none";
+      closeLockPortal();
       saveStateToStorage();
       autoGenerate();
     };
 
     const renderLockDropdown = (query) => {
+      const portal = ensureLockPortal();
+      positionLockPortal(lockSelect);
+
       const lines = getLockLines();
       const q = (query || "").trim().toLowerCase();
       const matches = q === "" ? lines : lines.filter(l => l.toLowerCase().includes(q));
       const shown = matches.slice(0, MAX_LOCK_RESULTS);
 
-      lockDropdown.innerHTML = "";
+      portal.innerHTML = "";
 
       const randomItem = document.createElement("div");
       randomItem.className = "col-lock-option col-lock-option-random";
@@ -1997,13 +2034,13 @@ function renderColumnsGrid() {
         e.preventDefault();
         selectLockValue(null);
       });
-      lockDropdown.appendChild(randomItem);
+      portal.appendChild(randomItem);
 
       if (shown.length === 0) {
         const empty = document.createElement("div");
         empty.className = "col-lock-option col-lock-option-empty";
         empty.textContent = "沒有符合關鍵字的結果";
-        lockDropdown.appendChild(empty);
+        portal.appendChild(empty);
       }
 
       shown.forEach(line => {
@@ -2015,22 +2052,25 @@ function renderColumnsGrid() {
           e.preventDefault(); // fire before input blur closes the dropdown
           selectLockValue(line);
         });
-        lockDropdown.appendChild(item);
+        portal.appendChild(item);
       });
 
       if (matches.length > MAX_LOCK_RESULTS) {
         const more = document.createElement("div");
         more.className = "col-lock-option col-lock-option-more";
         more.textContent = `...還有 ${matches.length - MAX_LOCK_RESULTS} 筆，請輸入更精確的關鍵字縮小範圍`;
-        lockDropdown.appendChild(more);
+        portal.appendChild(more);
       }
 
-      lockDropdown.style.display = "block";
+      portal.style.display = "block";
     };
 
     lockSelect.addEventListener("focus", () => {
       lockSelect.select();
       renderLockDropdown("");
+      lockPortalRepositionHandler = () => positionLockPortal(lockSelect);
+      window.addEventListener("scroll", lockPortalRepositionHandler, true);
+      window.addEventListener("resize", lockPortalRepositionHandler);
     });
 
     lockSelect.addEventListener("input", (e) => {
@@ -2039,7 +2079,7 @@ function renderColumnsGrid() {
 
     lockSelect.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
-        lockDropdown.style.display = "none";
+        closeLockPortal();
         lockSelect.value = col.lockedValue || "";
         lockSelect.blur();
       }
@@ -2048,13 +2088,12 @@ function renderColumnsGrid() {
     lockSelect.addEventListener("blur", () => {
       // Delay so a mousedown on an option fires before the dropdown closes
       setTimeout(() => {
-        lockDropdown.style.display = "none";
+        closeLockPortal();
         lockSelect.value = col.lockedValue || "";
       }, 150);
     });
 
     lockWrap.appendChild(lockSelect);
-    lockWrap.appendChild(lockDropdown);
     
     textarea.addEventListener("input", (e) => {
       col.content = e.target.value;

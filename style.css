@@ -1119,6 +1119,13 @@ select:focus {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
+/* Portal variant: appended directly to <body> so it always renders above
+   every card, escaping any card's backdrop-filter stacking context.
+   Position/left/top/width are all set inline via JS (positionLockPortal). */
+.col-lock-dropdown-portal {
+  z-index: 999;
+}
+
 .col-lock-option {
   padding: 6px 10px;
   font-size: 0.75rem;
