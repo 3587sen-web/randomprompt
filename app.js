@@ -1949,7 +1949,8 @@ function renderColumnsGrid() {
       lines.forEach(line => {
         const opt = document.createElement("option");
         opt.value = line;
-        opt.textContent = line.length > 25 ? line.slice(0, 25) + "..." : line;
+        opt.textContent = line.length > 70 ? line.slice(0, 70) + "..." : line;
+        opt.title = line; // full text on hover, in case it's still truncated
         if (col.lockedValue === line) {
           opt.selected = true;
         }
