@@ -1940,30 +1940,27 @@ function renderColumnsGrid() {
     const footer = document.createElement("div");
     footer.className = "col-card-footer";
     
-    const lockSelect = document.createElement("select");
+    // Lock control: custom searchable combobox (native <select> can't be searched)
+    const lockWrap = document.createElement("div");
+    lockWrap.className = "col-lock-combo";
+
+    const lockSelect = document.createElement("input");
+    lockSelect.type = "text";
     lockSelect.className = `col-lock-select ${col.lockedValue ? 'locked' : ''}`;
-    
-    const populateLockSelect = () => {
-      lockSelect.innerHTML = '<option value="">🎲 隨機抽選</option>';
-      const lines = col.content.split("\n").map(l => l.trim()).filter(l => l !== "");
-      lines.forEach(line => {
-        const opt = document.createElement("option");
-        opt.value = line;
-        opt.textContent = line.length > 70 ? line.slice(0, 70) + "..." : line;
-        opt.title = line; // full text on hover, in case it's still truncated
-        if (col.lockedValue === line) {
-          opt.selected = true;
-        }
-        lockSelect.appendChild(opt);
-      });
-    };
-    
-    populateLockSelect();
-    
-    lockSelect.addEventListener("change", (e) => {
-      const val = e.target.value;
+    lockSelect.placeholder = "🎲 隨機抽選（可輸入關鍵字搜尋）";
+    lockSelect.autocomplete = "off";
+    lockSelect.value = col.lockedValue || "";
+
+    const lockDropdown = document.createElement("div");
+    lockDropdown.className = "col-lock-dropdown";
+    lockDropdown.style.display = "none";
+
+    const MAX_LOCK_RESULTS = 150;
+    const getLockLines = () => col.content.split("\n").map(l => l.trim()).filter(l => l !== "");
+
+    const selectLockValue = (val) => {
       const headerPinBtn = card.querySelector(".col-pin-btn");
-      if (val === "") {
+      if (val === null) {
         col.lockedValue = null;
         lockSelect.classList.remove("locked");
         if (headerPinBtn) {
@@ -1979,15 +1976,90 @@ function renderColumnsGrid() {
         }
         showToast(`📌 已鎖定欄位「${col.title || '未命名'}」的值為: ${val}`, "success");
       }
+      lockSelect.value = col.lockedValue || "";
+      lockDropdown.style.display = "none";
       saveStateToStorage();
       autoGenerate();
+    };
+
+    const renderLockDropdown = (query) => {
+      const lines = getLockLines();
+      const q = (query || "").trim().toLowerCase();
+      const matches = q === "" ? lines : lines.filter(l => l.toLowerCase().includes(q));
+      const shown = matches.slice(0, MAX_LOCK_RESULTS);
+
+      lockDropdown.innerHTML = "";
+
+      const randomItem = document.createElement("div");
+      randomItem.className = "col-lock-option col-lock-option-random";
+      randomItem.textContent = "🎲 隨機抽選（取消鎖定）";
+      randomItem.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        selectLockValue(null);
+      });
+      lockDropdown.appendChild(randomItem);
+
+      if (shown.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "col-lock-option col-lock-option-empty";
+        empty.textContent = "沒有符合關鍵字的結果";
+        lockDropdown.appendChild(empty);
+      }
+
+      shown.forEach(line => {
+        const item = document.createElement("div");
+        item.className = "col-lock-option" + (col.lockedValue === line ? " active" : "");
+        item.textContent = line;
+        item.title = line;
+        item.addEventListener("mousedown", (e) => {
+          e.preventDefault(); // fire before input blur closes the dropdown
+          selectLockValue(line);
+        });
+        lockDropdown.appendChild(item);
+      });
+
+      if (matches.length > MAX_LOCK_RESULTS) {
+        const more = document.createElement("div");
+        more.className = "col-lock-option col-lock-option-more";
+        more.textContent = `...還有 ${matches.length - MAX_LOCK_RESULTS} 筆，請輸入更精確的關鍵字縮小範圍`;
+        lockDropdown.appendChild(more);
+      }
+
+      lockDropdown.style.display = "block";
+    };
+
+    lockSelect.addEventListener("focus", () => {
+      lockSelect.select();
+      renderLockDropdown("");
     });
+
+    lockSelect.addEventListener("input", (e) => {
+      renderLockDropdown(e.target.value);
+    });
+
+    lockSelect.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        lockDropdown.style.display = "none";
+        lockSelect.value = col.lockedValue || "";
+        lockSelect.blur();
+      }
+    });
+
+    lockSelect.addEventListener("blur", () => {
+      // Delay so a mousedown on an option fires before the dropdown closes
+      setTimeout(() => {
+        lockDropdown.style.display = "none";
+        lockSelect.value = col.lockedValue || "";
+      }, 150);
+    });
+
+    lockWrap.appendChild(lockSelect);
+    lockWrap.appendChild(lockDropdown);
     
     textarea.addEventListener("input", (e) => {
       col.content = e.target.value;
       saveStateToStorage();
       updateLinesCounter(card, col.content);
-      populateLockSelect();
       
       // Auto-unlock if locked value is deleted
       const lines = col.content.split("\n").map(l => l.trim()).filter(l => l !== "");
@@ -2009,7 +2081,7 @@ function renderColumnsGrid() {
     const counter = document.createElement("span");
     counter.className = "lines-counter";
     
-    footer.appendChild(lockSelect);
+    footer.appendChild(lockWrap);
 
     // No-repeat mode toggle
     const noRepeatBtn = document.createElement("button");

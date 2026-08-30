@@ -1059,29 +1059,41 @@ select:focus {
   transform: translateY(-1px);
 }
 
-.col-lock-select {
+.col-lock-combo {
+  position: relative;
   flex-grow: 1;
   min-width: 0;
   max-width: calc(100% - 140px);
-  padding: 3px 20px 3px 6px;
+}
+
+.col-lock-select {
+  width: 100%;
+  padding: 3px 26px 3px 6px;
   font-size: 0.75rem;
+  font-family: var(--font-text);
   border-radius: 4px;
-  background: rgba(10, 12, 20, 0.4);
+  background-color: rgba(10, 12, 20, 0.4);
   border: 1px solid var(--border-color);
   color: var(--text-muted);
   outline: none;
-  cursor: pointer;
+  cursor: text;
   transition: all var(--transition-fast);
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 8px center;
+  background-position: right 7px center;
+}
+
+.col-lock-select::placeholder {
+  color: rgba(156, 163, 175, 0.6);
 }
 
 .col-lock-select:hover {
   border-color: var(--border-color-hover);
   color: var(--text-main);
+}
+
+.col-lock-select:focus {
+  border-color: var(--text-highlight);
 }
 
 .col-lock-select.locked {
@@ -1091,9 +1103,63 @@ select:focus {
   box-shadow: 0 0 8px rgba(0, 242, 254, 0.15);
 }
 
-.col-lock-select option {
-  background-color: #161b26;
+/* Custom searchable dropdown list (replaces native <select> options) */
+.col-lock-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #161b26;
+  border: 1px solid var(--border-color-hover);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.col-lock-option {
+  padding: 6px 10px;
+  font-size: 0.75rem;
   color: var(--text-main);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.col-lock-option:last-child {
+  border-bottom: none;
+}
+
+.col-lock-option:hover {
+  background: rgba(0, 242, 254, 0.1);
+}
+
+.col-lock-option.active {
+  color: var(--text-highlight);
+  background: rgba(0, 242, 254, 0.06);
+  font-weight: 600;
+}
+
+.col-lock-option-random {
+  color: var(--text-muted);
+  font-style: italic;
+  border-bottom: 1px solid var(--border-color-hover);
+}
+
+.col-lock-option-empty,
+.col-lock-option-more {
+  color: var(--text-muted);
+  cursor: default;
+  font-style: italic;
+  text-align: center;
+}
+
+.col-lock-option-empty:hover,
+.col-lock-option-more:hover {
+  background: transparent;
 }
 
 /* Pin/Lock Button */
