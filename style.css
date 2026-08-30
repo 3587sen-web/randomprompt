@@ -1031,9 +1031,10 @@ select:focus {
 
 .col-card-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   margin-top: 4px;
 }
 
@@ -1061,9 +1062,9 @@ select:focus {
 
 .col-lock-combo {
   position: relative;
-  flex-grow: 1;
-  min-width: 0;
-  max-width: calc(100% - 140px);
+  flex: 1 1 100%;
+  width: 100%;
+  order: -1; /* always its own full-width row, above the other footer buttons */
 }
 
 .col-lock-select {
