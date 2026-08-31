@@ -1269,6 +1269,30 @@ let alwaysDraggedRow = null;  // tracks dragged always-tag row
 let activeCategoryTab = "__all__";
 const UNCATEGORIZED_LABEL = "未分類";
 
+// Default priority per category, based on general image-generation prompt
+// ordering conventions (subject > pose > outfit > details > scene > technical).
+// Only applied when CREATING a new column with a category already set — never
+// retroactively overwrites an existing column's priority. Fully adjustable
+// per-column afterwards via the ⭐ priority input.
+const CATEGORY_PRIORITY_DEFAULTS = {
+  "身份型": 100,
+  "姿勢動作": 90,
+  "服裝穿搭": 80,
+  "五官細節": 70,
+  "配件": 60,
+  "背景": 50,
+  "鏡頭構圖": 40,
+  "比例結構": 30,
+  "畫風": 20,
+  "技術參數": 10,
+  "數量": 5
+};
+
+function getDefaultPriorityForCategory(category) {
+  if (!category) return 0;
+  return CATEGORY_PRIORITY_DEFAULTS[category] ?? 0;
+}
+
 // Shared "portal" dropdown for the searchable lock combobox. It's appended
 // directly to <body> (not inside any card) so it always renders on top,
 // regardless of a card's backdrop-filter creating its own stacking context.
@@ -1930,6 +1954,13 @@ function renderColumnsGrid() {
       saveStateToStorage();
     });
     categoryInput.addEventListener("change", () => {
+      // If priority was never manually touched (still at the untouched
+      // default of 0), auto-fill it based on the newly chosen category.
+      // Manually-set priorities (including a deliberate 0) are left alone.
+      if (col.priority === 0 && col.category) {
+        col.priority = getDefaultPriorityForCategory(col.category);
+        saveStateToStorage();
+      }
       renderAll();
       autoGenerate();
     });
@@ -2415,14 +2446,15 @@ function setColCount(count) {
     // Append new empty columns
     while (state.columns.length < target) {
       const newIdx = state.columns.length;
+      const newCategory = activeCategoryTab === "__all__" ? "" : activeCategoryTab;
       state.columns.push({
         id: Date.now() + newIdx * 10,
         title: "",
         content: "",
         active: true,
         lockedValue: null,
-        category: activeCategoryTab === "__all__" ? "" : activeCategoryTab,
-        priority: 0
+        category: newCategory,
+        priority: getDefaultPriorityForCategory(newCategory)
       });
     }
   } else if (state.columns.length > target) {
@@ -2671,14 +2703,15 @@ function insertColumnAfter(index) {
     showToast("已達最高欄位上限 500 個", "error");
     return;
   }
+  const newCategory = activeCategoryTab === "__all__" ? "" : activeCategoryTab;
   const newCol = {
     id: Date.now(),
     title: "",
     content: "",
     active: true,
     lockedValue: null,
-    category: activeCategoryTab === "__all__" ? "" : activeCategoryTab,
-    priority: 0
+    category: newCategory,
+    priority: getDefaultPriorityForCategory(newCategory)
   };
   state.columns.splice(index + 1, 0, newCol);
   state.columnCount = state.columns.length;
