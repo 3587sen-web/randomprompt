@@ -121,10 +121,32 @@
           <button type="button" class="btn-hdr-toggle" id="btnClearSelection" style="display:none;" title="取消所有多選">✕ 取消選取</button>
         </div>
       </div>
-      <div class="category-tabs-bar" id="categoryTabsBar">
-        <!-- Rendered dynamically by app.js -->
+      <div class="category-tabs-row">
+        <div class="category-tabs-bar" id="categoryTabsBar">
+          <!-- Rendered dynamically by app.js -->
+        </div>
+        <button type="button" class="btn-hdr-toggle" id="btnCategoryDefaults" title="查看/調整每個分類的預設優先權，之後新增欄位會套用">⚙️ 分類優先權</button>
       </div>
-      <datalist id="categoryDatalist"></datalist>
+
+      <!-- Category Default Priority management panel -->
+      <div class="modal-overlay" id="categoryDefaultsModal">
+        <div class="modal-content glass">
+          <div class="modal-header">
+            <h3>分類預設優先權設定</h3>
+            <button class="modal-close" id="categoryDefaultsCloseX">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p class="category-defaults-hint">調整後，之後在該分類「新增」的欄位會直接套用這裡的數字，不會再跳回系統建議值。現有欄位不受影響。</p>
+            <div class="category-defaults-list" id="categoryDefaultsList">
+              <!-- Rendered dynamically by app.js -->
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="categoryDefaultsCloseBtn">關閉</button>
+          </div>
+        </div>
+      </div>
+
       <div class="columns-grid" id="columnsGrid">
         <!-- Rendered dynamically by app.js -->
       </div>

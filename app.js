@@ -1251,6 +1251,7 @@ let state = {
   generateCount: 1,
   columns: [], // { id: number, title: string, content: string, active: boolean }
   alwaysTags: [], // { id: number, text: string, enabled: boolean, position: string }
+  categoryDefaults: {}, // { [categoryName]: priorityNumber } — user-adjusted, persisted defaults
   settings: {
     useTitles: true,
     useComma: true
@@ -1269,12 +1270,11 @@ let alwaysDraggedRow = null;  // tracks dragged always-tag row
 let activeCategoryTab = "__all__";
 const UNCATEGORIZED_LABEL = "未分類";
 
-// Default priority per category, based on general image-generation prompt
-// ordering conventions (subject > pose > outfit > details > scene > technical).
-// Only applied when CREATING a new column with a category already set — never
-// retroactively overwrites an existing column's priority. Fully adjustable
-// per-column afterwards via the ⭐ priority input.
-const CATEGORY_PRIORITY_DEFAULTS = {
+// System-suggested starting values (only used the FIRST time a category is
+// seen, before the user has ever customized it). Based on general
+// image-generation prompt ordering conventions (subject > pose > outfit >
+// details > scene > technical).
+const SYSTEM_SUGGESTED_CATEGORY_PRIORITY = {
   "身份型": 100,
   "姿勢動作": 90,
   "服裝穿搭": 80,
@@ -1288,9 +1288,30 @@ const CATEGORY_PRIORITY_DEFAULTS = {
   "數量": 5
 };
 
+// User-adjustable, PERSISTED per-category default priority. Stored in
+// state.categoryDefaults so it survives reloads and is remembered per
+// category — adjusting it here changes what future new columns in that
+// category will default to. Individual column priorities are never
+// retroactively overwritten by changes here.
 function getDefaultPriorityForCategory(category) {
   if (!category) return 0;
-  return CATEGORY_PRIORITY_DEFAULTS[category] ?? 0;
+  if (state.categoryDefaults && Object.prototype.hasOwnProperty.call(state.categoryDefaults, category)) {
+    return state.categoryDefaults[category];
+  }
+  return SYSTEM_SUGGESTED_CATEGORY_PRIORITY[category] ?? 0;
+}
+
+function setDefaultPriorityForCategory(category, value) {
+  if (!category) return;
+  if (!state.categoryDefaults) state.categoryDefaults = {};
+  state.categoryDefaults[category] = value;
+  saveStateToStorage();
+}
+
+function resetDefaultPriorityForCategory(category) {
+  if (!category || !state.categoryDefaults) return;
+  delete state.categoryDefaults[category];
+  saveStateToStorage();
 }
 
 // Shared "portal" dropdown for the searchable lock combobox. It's appended
@@ -1476,7 +1497,11 @@ function initElements() {
     btnClearSelection: document.getElementById("btnClearSelection"),
     columnsGrid: document.getElementById("columnsGrid"),
     categoryTabsBar: document.getElementById("categoryTabsBar"),
-    categoryDatalist: document.getElementById("categoryDatalist"),
+    btnCategoryDefaults: document.getElementById("btnCategoryDefaults"),
+    categoryDefaultsModal: document.getElementById("categoryDefaultsModal"),
+    categoryDefaultsList: document.getElementById("categoryDefaultsList"),
+    categoryDefaultsCloseX: document.getElementById("categoryDefaultsCloseX"),
+    categoryDefaultsCloseBtn: document.getElementById("categoryDefaultsCloseBtn"),
     alwaysTagsGrid: document.getElementById("alwaysTagsGrid"),
     btnAddAlwaysTag: document.getElementById("btnAddAlwaysTag"),
     btnGenerate: document.getElementById("btnGenerate"),
@@ -1556,6 +1581,32 @@ function bindGlobalEvents() {
       selectedColumnIds.clear();
       renderColumnsGrid();
       updateSelectionBadge();
+    });
+  }
+  if (elements.btnCategoryDefaults) {
+    elements.btnCategoryDefaults.addEventListener("click", () => {
+      renderCategoryDefaultsPanel();
+      elements.categoryDefaultsModal.style.display = "flex";
+      setTimeout(() => {
+        elements.categoryDefaultsModal.classList.add("active");
+      }, 10);
+    });
+  }
+  const closeCategoryDefaultsModal = () => {
+    elements.categoryDefaultsModal.classList.remove("active");
+    setTimeout(() => {
+      elements.categoryDefaultsModal.style.display = "none";
+    }, 250);
+  };
+  if (elements.categoryDefaultsCloseX) {
+    elements.categoryDefaultsCloseX.addEventListener("click", closeCategoryDefaultsModal);
+  }
+  if (elements.categoryDefaultsCloseBtn) {
+    elements.categoryDefaultsCloseBtn.addEventListener("click", closeCategoryDefaultsModal);
+  }
+  if (elements.categoryDefaultsModal) {
+    elements.categoryDefaultsModal.addEventListener("click", (e) => {
+      if (e.target === elements.categoryDefaultsModal) closeCategoryDefaultsModal();
     });
   }
   
@@ -1651,11 +1702,28 @@ function renderAll() {
 }
 
 // Render the category tab bar above the columns grid
+// Auto-remove any custom priority override for a category that no longer
+// has any column using it — so switching themes doesn't leave stale
+// settings lingering forever in the "分類優先權設定" panel.
+function cleanupOrphanedCategoryDefaults() {
+  if (!state.categoryDefaults) return;
+  const activeCategories = new Set(getCategoryList().filter(c => c !== ""));
+  let changed = false;
+  Object.keys(state.categoryDefaults).forEach(cat => {
+    if (!activeCategories.has(cat)) {
+      delete state.categoryDefaults[cat];
+      changed = true;
+    }
+  });
+  if (changed) saveStateToStorage();
+}
+
 function renderCategoryTabs() {
   if (!elements.categoryTabsBar) return;
   elements.categoryTabsBar.innerHTML = "";
 
   const categories = getCategoryList();
+  cleanupOrphanedCategoryDefaults();
 
   // If nobody has used categories yet, hide the bar entirely (no clutter)
   if (categories.length <= 1 && categories[0] === "" ) {
@@ -1690,16 +1758,72 @@ function renderCategoryTabs() {
     const count = state.columns.filter(c => (c.category || "") === cat).length;
     elements.categoryTabsBar.appendChild(makeTab(cat, cat === "" ? UNCATEGORIZED_LABEL : cat, count));
   });
+}
 
-  // Keep the category datalist (used by each card's category input) in sync
-  if (elements.categoryDatalist) {
-    elements.categoryDatalist.innerHTML = "";
-    categories.filter(c => c !== "").forEach(cat => {
-      const opt = document.createElement("option");
-      opt.value = cat;
-      elements.categoryDatalist.appendChild(opt);
-    });
+// Render the "分類預設優先權設定" management panel — lists every category
+// currently in use (real ones only, not "未分類") with an editable default
+// priority. This is also a handy at-a-glance reference of all category names.
+function renderCategoryDefaultsPanel() {
+  if (!elements.categoryDefaultsList) return;
+  elements.categoryDefaultsList.innerHTML = "";
+
+  const categories = getCategoryList().filter(c => c !== "");
+
+  if (categories.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "category-defaults-empty";
+    empty.textContent = "目前還沒有任何分類，先幫欄位設定分類後再回來這裡調整優先權吧。";
+    elements.categoryDefaultsList.appendChild(empty);
+    return;
   }
+
+  // Sort by effective priority, highest first, so the list itself mirrors the
+  // actual generation order — easier to sanity-check at a glance.
+  const sorted = categories.slice().sort((a, b) => getDefaultPriorityForCategory(b) - getDefaultPriorityForCategory(a));
+
+  sorted.forEach(cat => {
+    const row = document.createElement("div");
+    row.className = "category-defaults-row";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "category-defaults-name";
+    nameEl.textContent = cat;
+
+    const countEl = document.createElement("span");
+    countEl.className = "category-defaults-count";
+    const count = state.columns.filter(c => (c.category || "") === cat).length;
+    countEl.textContent = `${count} 個欄位`;
+
+    const isCustom = state.categoryDefaults && Object.prototype.hasOwnProperty.call(state.categoryDefaults, cat);
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "category-defaults-input";
+    input.value = getDefaultPriorityForCategory(cat);
+    input.title = isCustom ? "已自訂（不會受系統建議值影響）" : "目前為系統建議值";
+    input.addEventListener("change", (e) => {
+      const val = parseInt(e.target.value);
+      setDefaultPriorityForCategory(cat, isNaN(val) ? 0 : val);
+      renderCategoryDefaultsPanel();
+    });
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "category-defaults-reset";
+    resetBtn.textContent = "還原建議值";
+    resetBtn.disabled = !isCustom;
+    resetBtn.title = isCustom ? "還原成系統建議值" : "目前已經是系統建議值";
+    resetBtn.addEventListener("click", () => {
+      resetDefaultPriorityForCategory(cat);
+      renderCategoryDefaultsPanel();
+    });
+
+    row.appendChild(nameEl);
+    row.appendChild(countEl);
+    row.appendChild(input);
+    row.appendChild(resetBtn);
+    elements.categoryDefaultsList.appendChild(row);
+  });
 }
 
 function updateHeaderStates() {
@@ -1942,30 +2066,58 @@ function renderColumnsGrid() {
     const metaRow = document.createElement("div");
     metaRow.className = "col-card-meta-row";
 
-    const categoryInput = document.createElement("input");
+    const categoryInput = document.createElement("select");
     categoryInput.className = "col-category-input";
-    categoryInput.type = "text";
-    categoryInput.value = col.category || "";
-    categoryInput.placeholder = "🗂️ 分類（未填＝未分類）";
-    categoryInput.setAttribute("list", "categoryDatalist");
-    categoryInput.title = "輸入分類名稱以建立頁籤，同名分類會自動歸為同一頁籤";
-    categoryInput.addEventListener("input", (e) => {
-      col.category = e.target.value.trim();
-      saveStateToStorage();
-    });
-    categoryInput.addEventListener("change", () => {
+    categoryInput.title = "點選現有分類，或選「＋ 新增分類」建立新的";
+
+    const populateCategoryOptions = () => {
+      categoryInput.innerHTML = "";
+
+      const noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = "🗂️ 未分類";
+      categoryInput.appendChild(noneOpt);
+
+      getCategoryList().filter(c => c !== "").forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        categoryInput.appendChild(opt);
+      });
+
+      const addNewOpt = document.createElement("option");
+      addNewOpt.value = "__new__";
+      addNewOpt.textContent = "＋ 新增分類...";
+      categoryInput.appendChild(addNewOpt);
+
+      categoryInput.value = col.category || "";
+    };
+
+    populateCategoryOptions();
+
+    categoryInput.addEventListener("change", async (e) => {
+      const val = e.target.value;
+
+      if (val === "__new__") {
+        const newName = await showCustomPrompt("新增分類", "請輸入新的分類名稱：", "");
+        if (newName === null || newName.trim() === "") {
+          categoryInput.value = col.category || ""; // cancelled — revert selection
+          return;
+        }
+        col.category = newName.trim();
+      } else {
+        col.category = val;
+      }
+
       // If priority was never manually touched (still at the untouched
       // default of 0), auto-fill it based on the newly chosen category.
       // Manually-set priorities (including a deliberate 0) are left alone.
       if (col.priority === 0 && col.category) {
         col.priority = getDefaultPriorityForCategory(col.category);
-        saveStateToStorage();
       }
+      saveStateToStorage();
       renderAll();
       autoGenerate();
-    });
-    categoryInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") categoryInput.blur();
     });
 
     const priorityWrap = document.createElement("div");
@@ -3354,6 +3506,7 @@ function saveStateToStorage() {
       enabled: tag.enabled,
       position: tag.position
     })),
+    categoryDefaults: state.categoryDefaults || {},
     settings: {
       useTitles: state.settings.useTitles,
       useComma: state.settings.useComma
@@ -3378,6 +3531,7 @@ function loadStateFromStorage() {
     state.columns = data.columns || [];
     state.columns.forEach(ensureColumnDefaults);
     state.alwaysTags = data.alwaysTags || [];
+    state.categoryDefaults = data.categoryDefaults || {};
     if (data.settings) {
       state.settings.useTitles = data.settings.useTitles !== false;
       state.settings.useComma = data.settings.useComma !== false;
