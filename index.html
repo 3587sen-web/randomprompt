@@ -136,12 +136,13 @@
             <button class="modal-close" id="categoryDefaultsCloseX">&times;</button>
           </div>
           <div class="modal-body">
-            <p class="category-defaults-hint">調整後，之後在該分類「新增」的欄位會直接套用這裡的數字，不會再跳回系統建議值。現有欄位不受影響。</p>
+            <p class="category-defaults-hint">✏️改名會同步更新所有正在使用的欄位；🗑️只會從「預設清單」移除，不會動到現有欄位；調整優先權數字後，之後在該分類新增的欄位會直接套用，不會跳回系統建議值。</p>
             <div class="category-defaults-list" id="categoryDefaultsList">
               <!-- Rendered dynamically by app.js -->
             </div>
           </div>
           <div class="modal-footer">
+            <button class="btn btn-secondary" id="btnAddPresetCategory">＋ 新增預設分類</button>
             <button class="btn btn-secondary" id="categoryDefaultsCloseBtn">關閉</button>
           </div>
         </div>

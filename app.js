@@ -1245,6 +1245,16 @@ const DEFAULT_ALWAYS_TAGS = [
   "vibrant colors"
 ];
 
+// Preset category list — a reusable "template" of category names that
+// always appears in the category dropdown, regardless of whether any
+// column currently uses them. Fully editable (rename/remove/add) via the
+// "⚙️ 分類優先權" panel. Starts with the 11-category structure already
+// used across this project.
+const DEFAULT_PRESET_CATEGORIES = [
+  "身份型", "姿勢動作", "服裝穿搭", "五官細節", "配件",
+  "背景", "鏡頭構圖", "比例結構", "畫風", "技術參數", "數量"
+];
+
 // App State
 let state = {
   columnCount: 12,
@@ -1252,6 +1262,7 @@ let state = {
   columns: [], // { id: number, title: string, content: string, active: boolean }
   alwaysTags: [], // { id: number, text: string, enabled: boolean, position: string }
   categoryDefaults: {}, // { [categoryName]: priorityNumber } — user-adjusted, persisted defaults
+  presetCategories: [...DEFAULT_PRESET_CATEGORIES], // reusable category template, editable
   settings: {
     useTitles: true,
     useComma: true
@@ -1371,6 +1382,17 @@ function getCategoryList() {
     if (!seen.includes(cat)) seen.push(cat);
   });
   return seen;
+}
+
+// Categories to show in the per-column category DROPDOWN: the persisted
+// preset list (always shown, even with zero columns using them yet) plus
+// any ad-hoc category currently in use that isn't in the preset list.
+// Note: category TABS above the grid intentionally still use getCategoryList()
+// only — tabs should only appear once a column actually uses that category.
+function getCategoryDropdownOptions() {
+  const presets = (state.presetCategories || []).filter(c => c && c.trim() !== "");
+  const adHocInUse = getCategoryList().filter(c => c !== "" && !presets.includes(c));
+  return [...presets, ...adHocInUse];
 }
 
 // Columns to display for the active tab, sorted by priority (highest first)
@@ -1502,6 +1524,7 @@ function initElements() {
     categoryDefaultsList: document.getElementById("categoryDefaultsList"),
     categoryDefaultsCloseX: document.getElementById("categoryDefaultsCloseX"),
     categoryDefaultsCloseBtn: document.getElementById("categoryDefaultsCloseBtn"),
+    btnAddPresetCategory: document.getElementById("btnAddPresetCategory"),
     alwaysTagsGrid: document.getElementById("alwaysTagsGrid"),
     btnAddAlwaysTag: document.getElementById("btnAddAlwaysTag"),
     btnGenerate: document.getElementById("btnGenerate"),
@@ -1604,6 +1627,9 @@ function bindGlobalEvents() {
   if (elements.categoryDefaultsCloseBtn) {
     elements.categoryDefaultsCloseBtn.addEventListener("click", closeCategoryDefaultsModal);
   }
+  if (elements.btnAddPresetCategory) {
+    elements.btnAddPresetCategory.addEventListener("click", addNewPresetCategory);
+  }
   if (elements.categoryDefaultsModal) {
     elements.categoryDefaultsModal.addEventListener("click", (e) => {
       if (e.target === elements.categoryDefaultsModal) closeCategoryDefaultsModal();
@@ -1702,15 +1728,17 @@ function renderAll() {
 }
 
 // Render the category tab bar above the columns grid
-// Auto-remove any custom priority override for a category that no longer
-// has any column using it — so switching themes doesn't leave stale
-// settings lingering forever in the "分類優先權設定" panel.
+// Auto-remove any custom priority override for a category that's neither
+// in the preset list NOR used by any column — true orphans only. Preset
+// categories keep their custom priority even with zero columns using them
+// right now, since they're meant to be reused as a template later.
 function cleanupOrphanedCategoryDefaults() {
   if (!state.categoryDefaults) return;
   const activeCategories = new Set(getCategoryList().filter(c => c !== ""));
+  const presetCategories = new Set(state.presetCategories || []);
   let changed = false;
   Object.keys(state.categoryDefaults).forEach(cat => {
-    if (!activeCategories.has(cat)) {
+    if (!activeCategories.has(cat) && !presetCategories.has(cat)) {
       delete state.categoryDefaults[cat];
       changed = true;
     }
@@ -1763,31 +1791,115 @@ function renderCategoryTabs() {
 // Render the "分類預設優先權設定" management panel — lists every category
 // currently in use (real ones only, not "未分類") with an editable default
 // priority. This is also a handy at-a-glance reference of all category names.
+async function renameCategoryEverywhere(oldName) {
+  const newName = await showCustomPrompt("重新命名分類", `將「${oldName}」重新命名為：`, oldName);
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (trimmed === "" || trimmed === oldName) return;
+
+  if (getCategoryDropdownOptions().includes(trimmed)) {
+    showToast(`「${trimmed}」這個分類名稱已經存在了`, "error");
+    return;
+  }
+
+  // Update the preset list entry (if it's a preset)
+  const idx = (state.presetCategories || []).indexOf(oldName);
+  if (idx !== -1) state.presetCategories[idx] = trimmed;
+
+  // Cascade the rename to every column currently using this category
+  state.columns.forEach(col => {
+    if ((col.category || "") === oldName) col.category = trimmed;
+  });
+
+  // Carry over any custom priority default to the new name
+  if (state.categoryDefaults && Object.prototype.hasOwnProperty.call(state.categoryDefaults, oldName)) {
+    state.categoryDefaults[trimmed] = state.categoryDefaults[oldName];
+    delete state.categoryDefaults[oldName];
+  }
+
+  if (activeCategoryTab === oldName) activeCategoryTab = trimmed;
+
+  saveStateToStorage();
+  renderAll();
+  renderCategoryDefaultsPanel();
+  showToast(`已將分類「${oldName}」重新命名為「${trimmed}」`, "success");
+}
+
+async function removeCategoryFromPresets(cat) {
+  const inUseCount = state.columns.filter(c => (c.category || "") === cat).length;
+  const warningMsg = inUseCount > 0
+    ? `確定要把「${cat}」從預設分類清單移除嗎？\n目前有 ${inUseCount} 個欄位正在使用這個分類，它們不會被清空，只是這個分類以後不會自動出現在新主題的下拉選單裡。`
+    : `確定要把「${cat}」從預設分類清單移除嗎？`;
+  const confirmed = await showCustomConfirm("移除預設分類", warningMsg);
+  if (!confirmed) return;
+  state.presetCategories = (state.presetCategories || []).filter(c => c !== cat);
+  saveStateToStorage();
+  renderAll();
+  renderCategoryDefaultsPanel();
+  showToast(`已將「${cat}」從預設分類清單移除`, "success");
+}
+
+function addCategoryToPresets(cat) {
+  if (!state.presetCategories) state.presetCategories = [];
+  if (state.presetCategories.includes(cat)) return;
+  state.presetCategories.push(cat);
+  saveStateToStorage();
+  renderAll();
+  renderCategoryDefaultsPanel();
+  showToast(`已將「${cat}」加入預設分類清單`, "success");
+}
+
+async function addNewPresetCategory() {
+  const name = await showCustomPrompt("新增預設分類", "請輸入新的分類名稱，之後在任何主題都能直接從下拉選單選用：", "");
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (trimmed === "") return;
+  if (!state.presetCategories) state.presetCategories = [];
+  if (state.presetCategories.includes(trimmed)) {
+    showToast("這個分類名稱已經在預設清單裡了", "error");
+    return;
+  }
+  state.presetCategories.push(trimmed);
+  saveStateToStorage();
+  renderCategoryDefaultsPanel();
+  showToast(`已新增預設分類「${trimmed}」`, "success");
+}
+
 function renderCategoryDefaultsPanel() {
   if (!elements.categoryDefaultsList) return;
   elements.categoryDefaultsList.innerHTML = "";
 
-  const categories = getCategoryList().filter(c => c !== "");
+  const categories = getCategoryDropdownOptions();
 
   if (categories.length === 0) {
     const empty = document.createElement("p");
     empty.className = "category-defaults-empty";
-    empty.textContent = "目前還沒有任何分類，先幫欄位設定分類後再回來這裡調整優先權吧。";
+    empty.textContent = "目前還沒有任何分類，點下方「＋ 新增預設分類」開始建立吧。";
     elements.categoryDefaultsList.appendChild(empty);
     return;
   }
+
+  const presetSet = new Set(state.presetCategories || []);
 
   // Sort by effective priority, highest first, so the list itself mirrors the
   // actual generation order — easier to sanity-check at a glance.
   const sorted = categories.slice().sort((a, b) => getDefaultPriorityForCategory(b) - getDefaultPriorityForCategory(a));
 
   sorted.forEach(cat => {
+    const isPreset = presetSet.has(cat);
+
     const row = document.createElement("div");
     row.className = "category-defaults-row";
 
     const nameEl = document.createElement("span");
     nameEl.className = "category-defaults-name";
     nameEl.textContent = cat;
+    if (!isPreset) {
+      const badge = document.createElement("span");
+      badge.className = "category-defaults-adhoc-badge";
+      badge.textContent = "未加入預設";
+      nameEl.appendChild(badge);
+    }
 
     const countEl = document.createElement("span");
     countEl.className = "category-defaults-count";
@@ -1818,10 +1930,37 @@ function renderCategoryDefaultsPanel() {
       renderCategoryDefaultsPanel();
     });
 
+    const renameBtn = document.createElement("button");
+    renameBtn.type = "button";
+    renameBtn.className = "category-defaults-icon-btn";
+    renameBtn.textContent = "✏️";
+    renameBtn.title = "重新命名（會一併更新所有正在使用此分類的欄位）";
+    renameBtn.addEventListener("click", () => renameCategoryEverywhere(cat));
+
     row.appendChild(nameEl);
     row.appendChild(countEl);
     row.appendChild(input);
     row.appendChild(resetBtn);
+    row.appendChild(renameBtn);
+
+    if (isPreset) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "category-defaults-icon-btn danger";
+      removeBtn.textContent = "🗑️";
+      removeBtn.title = "從預設分類清單移除";
+      removeBtn.addEventListener("click", () => removeCategoryFromPresets(cat));
+      row.appendChild(removeBtn);
+    } else {
+      const promoteBtn = document.createElement("button");
+      promoteBtn.type = "button";
+      promoteBtn.className = "category-defaults-promote";
+      promoteBtn.textContent = "＋ 加入預設";
+      promoteBtn.title = "把這個分類加入預設清單，之後新主題也能直接選用";
+      promoteBtn.addEventListener("click", () => addCategoryToPresets(cat));
+      row.appendChild(promoteBtn);
+    }
+
     elements.categoryDefaultsList.appendChild(row);
   });
 }
@@ -2078,7 +2217,7 @@ function renderColumnsGrid() {
       noneOpt.textContent = "🗂️ 未分類";
       categoryInput.appendChild(noneOpt);
 
-      getCategoryList().filter(c => c !== "").forEach(cat => {
+      getCategoryDropdownOptions().forEach(cat => {
         const opt = document.createElement("option");
         opt.value = cat;
         opt.textContent = cat;
@@ -3507,6 +3646,7 @@ function saveStateToStorage() {
       position: tag.position
     })),
     categoryDefaults: state.categoryDefaults || {},
+    presetCategories: state.presetCategories || [],
     settings: {
       useTitles: state.settings.useTitles,
       useComma: state.settings.useComma
@@ -3532,6 +3672,7 @@ function loadStateFromStorage() {
     state.columns.forEach(ensureColumnDefaults);
     state.alwaysTags = data.alwaysTags || [];
     state.categoryDefaults = data.categoryDefaults || {};
+    state.presetCategories = Array.isArray(data.presetCategories) ? data.presetCategories : [...DEFAULT_PRESET_CATEGORIES];
     if (data.settings) {
       state.settings.useTitles = data.settings.useTitles !== false;
       state.settings.useComma = data.settings.useComma !== false;
