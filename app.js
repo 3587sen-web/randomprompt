@@ -1269,6 +1269,232 @@ let state = {
   }
 };
 
+// ---------------------------------
+// Shared Content Library ("素材庫")
+// ---------------------------------
+// A GLOBAL pool of reusable content blocks, kept entirely separate from any
+// single preset (its own localStorage key), so switching/loading a preset
+// never touches it. A column can "link" to a library block via
+// col.linkedBlockId — its effective content is then read live from here,
+// so editing the library once updates every preset that links to it.
+let library = {}; // { [blockId]: { id, title, category, content, createdAt } }
+
+function saveLibraryToStorage() {
+  localStorage.setItem(`${STORAGE_PREFIX}library`, JSON.stringify(library));
+}
+
+function loadLibraryFromStorage() {
+  const stored = localStorage.getItem(`${STORAGE_PREFIX}library`);
+  try {
+    library = stored ? JSON.parse(stored) : {};
+  } catch (e) {
+    console.error("Failed to load library from localStorage", e);
+    library = {};
+  }
+}
+
+// The content a column should actually use: its linked library block's
+// content if linked (and the block still exists), otherwise its own local
+// content. ALWAYS use this instead of reading col.content directly for
+// generation, line-counts, lock search, etc.
+function getColumnEffectiveContent(col) {
+  if (col.linkedBlockId && library[col.linkedBlockId]) {
+    return library[col.linkedBlockId].content || "";
+  }
+  return col.content || "";
+}
+
+function isColumnLinked(col) {
+  return !!(col.linkedBlockId && library[col.linkedBlockId]);
+}
+
+function createLibraryBlock(title, category, content) {
+  const id = "blk_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+  library[id] = { id, title, category: category || "", content: content || "", createdAt: Date.now() };
+  saveLibraryToStorage();
+  return id;
+}
+
+// ---------------------------------
+// Library Picker (link a column to an existing library block)
+// ---------------------------------
+let libraryPickerTargetCol = null;
+
+function openLibraryPicker(col, card) {
+  libraryPickerTargetCol = col;
+  if (elements.libraryPickerSearch) elements.libraryPickerSearch.value = "";
+  renderLibraryPickerList("");
+  elements.libraryPickerModal.style.display = "flex";
+  setTimeout(() => elements.libraryPickerModal.classList.add("active"), 10);
+  setTimeout(() => elements.libraryPickerSearch && elements.libraryPickerSearch.focus(), 50);
+}
+
+function closeAllOverlayModals() {
+  [elements.libraryPickerModal, elements.libraryManagerModal].forEach(modalEl => {
+    if (!modalEl) return;
+    modalEl.classList.remove("active");
+    setTimeout(() => { modalEl.style.display = "none"; }, 250);
+  });
+}
+
+function renderLibraryPickerList(query) {
+  if (!elements.libraryPickerList) return;
+  elements.libraryPickerList.innerHTML = "";
+
+  const q = (query || "").trim().toLowerCase();
+  const items = Object.values(library)
+    .filter(b => !q || b.title.toLowerCase().includes(q) || b.category.toLowerCase().includes(q))
+    .sort((a, b) => a.title.localeCompare(b.title, "zh-Hant"));
+
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "category-defaults-empty";
+    empty.textContent = Object.keys(library).length === 0
+      ? "素材庫目前還是空的，先用某個欄位的「📤 另存為素材庫項目」建立第一個項目吧。"
+      : "沒有符合關鍵字的素材庫項目";
+    elements.libraryPickerList.appendChild(empty);
+    return;
+  }
+
+  items.forEach(block => {
+    const row = document.createElement("div");
+    row.className = "library-picker-row";
+
+    const info = document.createElement("div");
+    info.className = "library-picker-info";
+    const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
+    info.innerHTML = `<span class="library-picker-title">${block.title}</span>` +
+      (block.category ? `<span class="library-picker-cat">${block.category}</span>` : "") +
+      `<span class="library-picker-count">${lineCount} 行</span>`;
+
+    const selectBtn = document.createElement("button");
+    selectBtn.type = "button";
+    selectBtn.className = "btn btn-primary btn-sm";
+    selectBtn.textContent = "連結這一項";
+    selectBtn.addEventListener("click", () => {
+      if (!libraryPickerTargetCol) return;
+      libraryPickerTargetCol.linkedBlockId = block.id;
+      libraryPickerTargetCol.content = ""; // library content is now the source of truth
+      saveStateToStorage();
+      closeAllOverlayModals();
+      renderAll();
+      autoGenerate();
+      showToast(`🔗 已將欄位連結到素材庫項目「${block.title}」`, "success");
+    });
+
+    row.appendChild(info);
+    row.appendChild(selectBtn);
+    elements.libraryPickerList.appendChild(row);
+  });
+}
+
+// ---------------------------------
+// Library Manager (browse / rename / edit / delete all library items)
+// ---------------------------------
+function renderLibraryManagerList(query) {
+  if (!elements.libraryManagerList) return;
+  elements.libraryManagerList.innerHTML = "";
+
+  const q = (query || "").trim().toLowerCase();
+  const items = Object.values(library)
+    .filter(b => !q || b.title.toLowerCase().includes(q) || b.category.toLowerCase().includes(q))
+    .sort((a, b) => a.title.localeCompare(b.title, "zh-Hant"));
+
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "category-defaults-empty";
+    empty.textContent = Object.keys(library).length === 0
+      ? "素材庫目前還是空的。"
+      : "沒有符合關鍵字的素材庫項目";
+    elements.libraryManagerList.appendChild(empty);
+    return;
+  }
+
+  items.forEach(block => {
+    const usedByCount = state.columns.filter(c => c.linkedBlockId === block.id).length;
+    const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
+
+    const row = document.createElement("div");
+    row.className = "library-manager-row";
+
+    const headerRow = document.createElement("div");
+    headerRow.className = "library-manager-row-header";
+
+    const titleEl = document.createElement("span");
+    titleEl.className = "library-manager-title";
+    titleEl.textContent = block.title;
+
+    const metaEl = document.createElement("span");
+    metaEl.className = "library-manager-meta";
+    metaEl.textContent = `${lineCount} 行・目前工作區有 ${usedByCount} 個欄位連結中`;
+
+    const renameBtn = document.createElement("button");
+    renameBtn.type = "button";
+    renameBtn.className = "category-defaults-icon-btn";
+    renameBtn.textContent = "✏️";
+    renameBtn.title = "重新命名這個素材庫項目";
+    renameBtn.addEventListener("click", async () => {
+      const newName = await showCustomPrompt("重新命名素材庫項目", "請輸入新名稱：", block.title);
+      if (newName === null || newName.trim() === "") return;
+      block.title = newName.trim();
+      saveLibraryToStorage();
+      renderLibraryManagerList(elements.libraryManagerSearch.value);
+      renderAll();
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "category-defaults-icon-btn danger";
+    deleteBtn.textContent = "🗑️";
+    deleteBtn.title = "刪除這個素材庫項目";
+    deleteBtn.addEventListener("click", async () => {
+      const warningMsg = usedByCount > 0
+        ? `目前工作區中有 ${usedByCount} 個欄位正在連結「${block.title}」。\n刪除後，這些欄位會自動解除連結，並把目前的內容保留在欄位自己身上（不會變空白），但之後不會再跟著素材庫同步。\n\n確定要刪除嗎？`
+        : `確定要刪除素材庫項目「${block.title}」嗎？`;
+      const confirmed = await showCustomConfirm("刪除素材庫項目", warningMsg);
+      if (!confirmed) return;
+
+      // Detach any columns in the current working session first, preserving their last content
+      state.columns.forEach(c => {
+        if (c.linkedBlockId === block.id) {
+          c.content = block.content || "";
+          c.linkedBlockId = null;
+        }
+      });
+      delete library[block.id];
+      saveLibraryToStorage();
+      saveStateToStorage();
+      renderLibraryManagerList(elements.libraryManagerSearch.value);
+      renderAll();
+      showToast(`🗑️ 已刪除素材庫項目「${block.title}」`, "success");
+    });
+
+    headerRow.appendChild(titleEl);
+    headerRow.appendChild(metaEl);
+    headerRow.appendChild(renameBtn);
+    headerRow.appendChild(deleteBtn);
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "library-manager-textarea";
+    textarea.value = block.content || "";
+    textarea.placeholder = "每行輸入一個標籤/詞彙...";
+    textarea.addEventListener("input", (e) => {
+      block.content = e.target.value;
+      saveLibraryToStorage();
+      const lc = e.target.value.split("\n").map(l => l.trim()).filter(l => l !== "").length;
+      metaEl.textContent = `${lc} 行・目前工作區有 ${usedByCount} 個欄位連結中`;
+    });
+    textarea.addEventListener("change", () => {
+      renderAll(); // reflect the edit in any linked column once editing is done
+      autoGenerate();
+    });
+
+    row.appendChild(headerRow);
+    row.appendChild(textarea);
+    elements.libraryManagerList.appendChild(row);
+  });
+}
+
 // Storage prefix
 const STORAGE_PREFIX = "aura_pg_";
 
@@ -1371,6 +1597,7 @@ let dropTarget = null;     // { colId, position: 'before' | 'after' }
 function ensureColumnDefaults(col) {
   if (typeof col.category !== "string") col.category = "";
   if (typeof col.priority !== "number" || isNaN(col.priority)) col.priority = 0;
+  if (typeof col.linkedBlockId !== "string") col.linkedBlockId = null;
   return col;
 }
 
@@ -1481,6 +1708,7 @@ function updateSelectionBadge() {
 // Initialize Elements
 document.addEventListener("DOMContentLoaded", () => {
   initElements();
+  loadLibraryFromStorage();
   loadStateFromStorage();
   bindGlobalEvents();
   
@@ -1525,6 +1753,17 @@ function initElements() {
     categoryDefaultsCloseX: document.getElementById("categoryDefaultsCloseX"),
     categoryDefaultsCloseBtn: document.getElementById("categoryDefaultsCloseBtn"),
     btnAddPresetCategory: document.getElementById("btnAddPresetCategory"),
+    btnLibraryManager: document.getElementById("btnLibraryManager"),
+    libraryPickerModal: document.getElementById("libraryPickerModal"),
+    libraryPickerSearch: document.getElementById("libraryPickerSearch"),
+    libraryPickerList: document.getElementById("libraryPickerList"),
+    libraryPickerCloseX: document.getElementById("libraryPickerCloseX"),
+    libraryPickerCloseBtn: document.getElementById("libraryPickerCloseBtn"),
+    libraryManagerModal: document.getElementById("libraryManagerModal"),
+    libraryManagerSearch: document.getElementById("libraryManagerSearch"),
+    libraryManagerList: document.getElementById("libraryManagerList"),
+    libraryManagerCloseX: document.getElementById("libraryManagerCloseX"),
+    libraryManagerCloseBtn: document.getElementById("libraryManagerCloseBtn"),
     alwaysTagsGrid: document.getElementById("alwaysTagsGrid"),
     btnAddAlwaysTag: document.getElementById("btnAddAlwaysTag"),
     btnGenerate: document.getElementById("btnGenerate"),
@@ -1633,6 +1872,59 @@ function bindGlobalEvents() {
   if (elements.categoryDefaultsModal) {
     elements.categoryDefaultsModal.addEventListener("click", (e) => {
       if (e.target === elements.categoryDefaultsModal) closeCategoryDefaultsModal();
+    });
+  }
+
+  // Generic modal open/close (reused by library picker + library manager)
+  const openOverlayModal = (modalEl) => {
+    modalEl.style.display = "flex";
+    setTimeout(() => modalEl.classList.add("active"), 10);
+  };
+  const closeOverlayModal = (modalEl) => {
+    modalEl.classList.remove("active");
+    setTimeout(() => { modalEl.style.display = "none"; }, 250);
+  };
+
+  // Library Picker modal (choose a block to link a column to)
+  if (elements.libraryPickerCloseX) {
+    elements.libraryPickerCloseX.addEventListener("click", () => closeOverlayModal(elements.libraryPickerModal));
+  }
+  if (elements.libraryPickerCloseBtn) {
+    elements.libraryPickerCloseBtn.addEventListener("click", () => closeOverlayModal(elements.libraryPickerModal));
+  }
+  if (elements.libraryPickerModal) {
+    elements.libraryPickerModal.addEventListener("click", (e) => {
+      if (e.target === elements.libraryPickerModal) closeOverlayModal(elements.libraryPickerModal);
+    });
+  }
+  if (elements.libraryPickerSearch) {
+    elements.libraryPickerSearch.addEventListener("input", (e) => {
+      renderLibraryPickerList(e.target.value);
+    });
+  }
+
+  // Library Manager modal (browse/rename/edit/delete all library items)
+  if (elements.btnLibraryManager) {
+    elements.btnLibraryManager.addEventListener("click", () => {
+      elements.libraryManagerSearch.value = "";
+      renderLibraryManagerList("");
+      openOverlayModal(elements.libraryManagerModal);
+    });
+  }
+  if (elements.libraryManagerCloseX) {
+    elements.libraryManagerCloseX.addEventListener("click", () => closeOverlayModal(elements.libraryManagerModal));
+  }
+  if (elements.libraryManagerCloseBtn) {
+    elements.libraryManagerCloseBtn.addEventListener("click", () => closeOverlayModal(elements.libraryManagerModal));
+  }
+  if (elements.libraryManagerModal) {
+    elements.libraryManagerModal.addEventListener("click", (e) => {
+      if (e.target === elements.libraryManagerModal) closeOverlayModal(elements.libraryManagerModal);
+    });
+  }
+  if (elements.libraryManagerSearch) {
+    elements.libraryManagerSearch.addEventListener("input", (e) => {
+      renderLibraryManagerList(e.target.value);
     });
   }
   
@@ -2006,7 +2298,7 @@ function renderColumnsGrid() {
 
   visibleColumns.forEach((col, index) => {
     const card = document.createElement("div");
-    card.className = `col-card ${col.active ? 'active' : 'inactive'} ${selectedColumnIds.has(col.id) ? 'selected' : ''}`;
+    card.className = `col-card ${col.active ? 'active' : 'inactive'} ${selectedColumnIds.has(col.id) ? 'selected' : ''} ${isColumnLinked(col) ? 'linked' : ''}`;
     card.setAttribute("data-id", col.id);
     
     // Drag and Drop event listeners on card (supports dragging a multi-selection as a group)
@@ -2165,7 +2457,7 @@ function renderColumnsGrid() {
     toggleInput.checked = col.active;
     toggleInput.addEventListener("change", (e) => {
       col.active = e.target.checked;
-      card.className = `col-card ${col.active ? 'active' : 'inactive'}`;
+      card.className = `col-card ${col.active ? 'active' : 'inactive'} ${selectedColumnIds.has(col.id) ? 'selected' : ''} ${isColumnLinked(col) ? 'linked' : ''}`;
       saveStateToStorage();
       updateHeaderStates();
       // Re-render always tags positions dropdown to account for changed index/active states
@@ -2293,8 +2585,11 @@ function renderColumnsGrid() {
     textWrapper.className = "col-textarea-wrapper";
     
     const textarea = document.createElement("textarea");
-    textarea.value = col.content;
+    textarea.value = getColumnEffectiveContent(col);
     textarea.placeholder = "每行輸入一個標籤/詞彙...";
+    if (isColumnLinked(col)) {
+      textarea.title = "此欄位已連結素材庫，在這裡編輯會直接修改素材庫內容，同步影響所有使用此素材的欄位";
+    }
     
     // Footer section
     const footer = document.createElement("div");
@@ -2312,7 +2607,7 @@ function renderColumnsGrid() {
     lockSelect.value = col.lockedValue || "";
 
     const MAX_LOCK_RESULTS = 150;
-    const getLockLines = () => col.content.split("\n").map(l => l.trim()).filter(l => l !== "");
+    const getLockLines = () => getColumnEffectiveContent(col).split("\n").map(l => l.trim()).filter(l => l !== "");
 
     const selectLockValue = (val) => {
       const headerPinBtn = card.querySelector(".col-pin-btn");
@@ -2418,12 +2713,18 @@ function renderColumnsGrid() {
     lockWrap.appendChild(lockSelect);
     
     textarea.addEventListener("input", (e) => {
-      col.content = e.target.value;
-      saveStateToStorage();
-      updateLinesCounter(card, col.content);
+      if (isColumnLinked(col)) {
+        library[col.linkedBlockId].content = e.target.value;
+        saveLibraryToStorage();
+      } else {
+        col.content = e.target.value;
+        saveStateToStorage();
+      }
+      const effectiveContent = getColumnEffectiveContent(col);
+      updateLinesCounter(card, effectiveContent);
       
       // Auto-unlock if locked value is deleted
-      const lines = col.content.split("\n").map(l => l.trim()).filter(l => l !== "");
+      const lines = effectiveContent.split("\n").map(l => l.trim()).filter(l => l !== "");
       if (col.lockedValue && !lines.includes(col.lockedValue)) {
         col.lockedValue = null;
         lockSelect.value = "";
@@ -2490,12 +2791,81 @@ function renderColumnsGrid() {
     });
     footer.appendChild(insertBtn);
 
+    // Library link controls
+    const libraryBtnGroup = document.createElement("div");
+    libraryBtnGroup.className = "col-library-btn-group";
+
+    const linkBadge = document.createElement("span");
+    linkBadge.className = "col-library-badge";
+    linkBadge.textContent = "🔗 已連結素材庫";
+    linkBadge.title = "此欄位內容來自共用素材庫，編輯內容會同步影響所有使用此素材的欄位";
+
+    const linkBtn = document.createElement("button");
+    linkBtn.type = "button";
+    linkBtn.className = "col-library-btn";
+    linkBtn.textContent = "🔗 連結素材庫";
+    linkBtn.title = "把這個欄位連結到共用素材庫的某一項，內容會即時同步";
+    linkBtn.addEventListener("click", () => openLibraryPicker(col, card));
+
+    const unlinkBtn = document.createElement("button");
+    unlinkBtn.type = "button";
+    unlinkBtn.className = "col-library-btn unlink";
+    unlinkBtn.textContent = "🔓 解除連結";
+    unlinkBtn.title = "解除連結，把目前內容留在這個欄位自己身上（獨立備份，之後不再跟著素材庫變動）";
+    unlinkBtn.addEventListener("click", async () => {
+      const confirmed = await showCustomConfirm(
+        "解除連結",
+        `確定要把「${col.title || '此欄位'}」解除素材庫連結嗎？\n目前的內容會保留在這個欄位自己身上，但之後素材庫更新就不會再同步過來。`
+      );
+      if (!confirmed) return;
+      const finalContent = getColumnEffectiveContent(col);
+      col.linkedBlockId = null;
+      col.content = finalContent;
+      saveStateToStorage();
+      renderAll();
+      autoGenerate();
+      showToast(`🔓 已解除「${col.title || '此欄位'}」的素材庫連結`, "success");
+    });
+
+    const promoteBtn = document.createElement("button");
+    promoteBtn.type = "button";
+    promoteBtn.className = "col-library-btn promote";
+    promoteBtn.textContent = "📤 另存為素材庫項目";
+    promoteBtn.title = "把目前這個欄位的內容存成新的素材庫項目，並自動連結它";
+    promoteBtn.addEventListener("click", async () => {
+      const currentContent = getColumnEffectiveContent(col);
+      if (!currentContent.trim()) {
+        showToast("這個欄位還沒有內容，無法另存為素材庫項目", "error");
+        return;
+      }
+      const blockName = await showCustomPrompt(
+        "另存為素材庫項目",
+        "請輸入這個素材庫項目的名稱：",
+        col.title || ""
+      );
+      if (blockName === null || blockName.trim() === "") return;
+      const newId = createLibraryBlock(blockName.trim(), col.category || "", currentContent);
+      col.linkedBlockId = newId;
+      saveStateToStorage();
+      renderAll();
+      showToast(`📤 已另存為素材庫項目「${blockName.trim()}」並自動連結`, "success");
+    });
+
+    if (isColumnLinked(col)) {
+      libraryBtnGroup.appendChild(linkBadge);
+      libraryBtnGroup.appendChild(unlinkBtn);
+    } else {
+      libraryBtnGroup.appendChild(linkBtn);
+      libraryBtnGroup.appendChild(promoteBtn);
+    }
+    footer.appendChild(libraryBtnGroup);
+
     card.appendChild(header);
     card.appendChild(textWrapper);
     card.appendChild(footer);
 
     elements.columnsGrid.appendChild(card);
-    updateLinesCounter(card, col.content);
+    updateLinesCounter(card, getColumnEffectiveContent(col));
   });
 
   updateSelectionBadge();
@@ -2535,7 +2905,7 @@ function togglePin(col, pinBtn, cardElement) {
     }
   } else {
     // Lock
-    const lines = col.content.split("\n").map(l => l.trim()).filter(l => l !== "");
+    const lines = getColumnEffectiveContent(col).split("\n").map(l => l.trim()).filter(l => l !== "");
     if (lines.length === 0) {
       showToast("此欄位沒有內容，無法鎖定", "error");
       return;
@@ -2836,14 +3206,15 @@ function clearClipboard() {
 }
 
 function copyColumn(col) {
-  setClipboard({ title: col.title, content: col.content, category: col.category || "", priority: col.priority || 0 });
+  setClipboard({ title: col.title, content: getColumnEffectiveContent(col), category: col.category || "", priority: col.priority || 0 });
   showToast(`📋 已複製欄位「${col.title || '（無標題）'}」`, "success");
 }
 
 function cutColumn(col) {
-  setClipboard({ title: col.title, content: col.content, category: col.category || "", priority: col.priority || 0 });
+  setClipboard({ title: col.title, content: getColumnEffectiveContent(col), category: col.category || "", priority: col.priority || 0 });
   col.title   = "";
   col.content = "";
+  col.linkedBlockId = null;
   col.lockedValue = null;
   saveStateToStorage();
   renderAll();
@@ -3045,7 +3416,18 @@ function exportSinglePreset() {
     return;
   }
 
-  const fileContent = JSON.stringify(preset, null, 2);
+  // Flatten any linked library content into literal text so this single
+  // exported file is fully self-contained and works on any other machine,
+  // even one without this library.
+  const flattenedPreset = {
+    ...preset,
+    columns: (preset.columns || []).map(col => {
+      const { linkedBlockId, ...rest } = col;
+      return { ...rest, content: getColumnEffectiveContent(col) };
+    })
+  };
+
+  const fileContent = JSON.stringify(flattenedPreset, null, 2);
   const blob = new Blob([fileContent], { type: "application/json" });
   const url  = URL.createObjectURL(blob);
 
@@ -3061,7 +3443,7 @@ function exportSinglePreset() {
     URL.revokeObjectURL(url);
   }, 100);
 
-  showToast(`📤 設定檔「${name}」已單獨匯出`, "success");
+  showToast(`📤 設定檔「${name}」已單獨匯出（已將素材庫連結展開成完整內容，可獨立使用）`, "success");
 }
 
 function addNewColumn() {
@@ -3080,7 +3462,7 @@ async function removeColumn(index) {
   }
   
   const col = state.columns[index];
-  const hasContent = col.title.trim() !== "" || col.content.trim() !== "";
+  const hasContent = col.title.trim() !== "" || getColumnEffectiveContent(col).trim() !== "";
   
   if (hasContent) {
     const confirmDelete = await showCustomConfirm(
@@ -3104,13 +3486,14 @@ async function removeColumn(index) {
 async function emptyAllContents() {
   const confirmClear = await showCustomConfirm(
     "清空欄位內容",
-    "確定要清空所有欄位中的文字內容嗎？此操作無法還原。",
+    "確定要清空所有欄位中的文字內容嗎？此操作無法還原。已連結素材庫的欄位會自動解除連結（不會動到素材庫本身的內容）。",
     true
   );
   if (!confirmClear) return;
   
   state.columns.forEach(col => {
     col.content = "";
+    col.linkedBlockId = null; // never blank out shared library content as a side effect
   });
   
   saveStateToStorage();
@@ -3239,7 +3622,7 @@ function generatePrompt(shouldAnimate = true) {
       const idx = state.columns.indexOf(col);
       if (!col.active) return;
       
-      const text = col.content.trim();
+      const text = getColumnEffectiveContent(col).trim();
       if (text === "") return;
       
       const lines = text.split("\n")
@@ -3637,7 +4020,8 @@ function saveStateToStorage() {
       active: col.active,
       lockedValue: col.lockedValue || null,
       category: col.category || "",
-      priority: typeof col.priority === "number" ? col.priority : 0
+      priority: typeof col.priority === "number" ? col.priority : 0,
+      linkedBlockId: col.linkedBlockId || null
     })),
     alwaysTags: state.alwaysTags.map(tag => ({
       id: tag.id,
@@ -3776,7 +4160,8 @@ async function saveCurrentPreset() {
       active: col.active,
       lockedValue: col.lockedValue || null,
       category: col.category || "",
-      priority: typeof col.priority === "number" ? col.priority : 0
+      priority: typeof col.priority === "number" ? col.priority : 0,
+      linkedBlockId: col.linkedBlockId || null
     })),
     alwaysTags: state.alwaysTags.map(tag => ({
       text: tag.text,
@@ -3838,7 +4223,8 @@ function loadPresetData(data) {
       active: col.active !== false,
       lockedValue: col.lockedValue || null,
       category: col.category || "",
-      priority: typeof col.priority === "number" ? col.priority : 0
+      priority: typeof col.priority === "number" ? col.priority : 0,
+      linkedBlockId: col.linkedBlockId || null
     }));
     
     // Restore Always tags
@@ -3941,8 +4327,21 @@ function exportPresetsToFile() {
     showToast("當前無任何儲存的設定檔可匯出", "error");
     return;
   }
-  
-  const fileContent = JSON.stringify(presets, null, 2);
+
+  // Flatten any linked library content so the exported file is fully
+  // self-contained (works on any machine, even without this library).
+  const flattenedPresets = {};
+  Object.entries(presets).forEach(([name, preset]) => {
+    flattenedPresets[name] = {
+      ...preset,
+      columns: (preset.columns || []).map(col => {
+        const { linkedBlockId, ...rest } = col;
+        return { ...rest, content: getColumnEffectiveContent(col) };
+      })
+    };
+  });
+
+  const fileContent = JSON.stringify(flattenedPresets, null, 2);
   const blob = new Blob([fileContent], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   
@@ -3958,7 +4357,7 @@ function exportPresetsToFile() {
     URL.revokeObjectURL(url);
   }, 100);
   
-  showToast("⬇️ 設定檔已成功下載匯出", "success");
+  showToast("⬇️ 設定檔已成功下載匯出（已展開素材庫連結，檔案可獨立使用）", "success");
 }
 
 // Import presets from JSON file
@@ -4203,6 +4602,7 @@ const PORTABLE_TYPE    = "aura_portable_backup";
 function exportPortablePack() {
   const currentState = localStorage.getItem(`${STORAGE_PREFIX}current_state`);
   const presets      = localStorage.getItem(PRESETS_KEY);
+  const libraryData  = localStorage.getItem(`${STORAGE_PREFIX}library`);
   
   const pack = {
     _type:        PORTABLE_TYPE,
@@ -4210,13 +4610,15 @@ function exportPortablePack() {
     _exportedAt:  new Date().toISOString(),
     _appName:     "Aura Prompt Generator",
     current_state: currentState ? JSON.parse(currentState) : null,
-    presets:       presets      ? JSON.parse(presets)      : {}
+    presets:       presets      ? JSON.parse(presets)      : {},
+    library:       libraryData  ? JSON.parse(libraryData)  : {}
   };
   
   const hasState   = !!pack.current_state;
   const presetCount = Object.keys(pack.presets).length;
+  const libraryCount = Object.keys(pack.library).length;
   
-  if (!hasState && presetCount === 0) {
+  if (!hasState && presetCount === 0 && libraryCount === 0) {
     showToast("目前沒有任何資料可以打包", "error");
     return;
   }
@@ -4238,7 +4640,8 @@ function exportPortablePack() {
   
   const summary = [
     hasState   ? "工作狀態" : null,
-    presetCount > 0 ? `${presetCount} 個設定檔` : null
+    presetCount > 0 ? `${presetCount} 個設定檔` : null,
+    libraryCount > 0 ? `${libraryCount} 個素材庫項目` : null
   ].filter(Boolean).join("、");
   
   showToast(`📦 便攜包已匯出（包含：${summary}）`, "success");
@@ -4276,7 +4679,11 @@ async function importPortablePack(event) {
       const packPresets = (pack.presets && typeof pack.presets === "object" && !Array.isArray(pack.presets))
         ? pack.presets
         : {};
+      const packLibrary = (pack.library && typeof pack.library === "object" && !Array.isArray(pack.library))
+        ? pack.library
+        : {};
       const presetCount = Object.keys(packPresets).length;
+      const libraryCount = Object.keys(packLibrary).length;
       const exportDate  = pack._exportedAt
         ? new Date(pack._exportedAt).toLocaleString("zh-TW")
         : "未知";
@@ -4286,7 +4693,7 @@ async function importPortablePack(event) {
         "還原便攜包",
         `偵測到便攜包（匯出時間：${exportDate}）\n\n` +
         `包含：${hasState ? "工作狀態 ✓" : "工作狀態 ✗"}、` +
-        `${presetCount} 個設定檔\n\n` +
+        `${presetCount} 個設定檔、${libraryCount} 個素材庫項目\n\n` +
         `確認要還原此便攜包嗎？`,
         false
       );
@@ -4297,8 +4704,8 @@ async function importPortablePack(event) {
       // false/null = 完全覆寫（工作狀態 + 設定檔全部替換）
       const mergeOnly = await showCustomConfirm(
         "還原模式",
-        "選擇「確認」→ 合併模式：保留目前工作狀態，僅合併設定檔\n" +
-        "選擇「取消」→ 完全覆寫：工作狀態與設定檔全部替換為便攜包內容",
+        "選擇「確認」→ 合併模式：保留目前工作狀態，僅合併設定檔與素材庫\n" +
+        "選擇「取消」→ 完全覆寫：工作狀態、設定檔與素材庫全部替換為便攜包內容",
         false
       );
       // mergeOnly = true → 確認（合併），null → 取消（覆寫）
@@ -4328,14 +4735,29 @@ async function importPortablePack(event) {
         // 完全覆寫，但沒有設定檔 → 清空設定檔
         savePresetsToStorage({});
       }
+
+      // 3c. 素材庫
+      if (libraryCount > 0) {
+        if (isFullOverwrite) {
+          library = packLibrary;
+        } else {
+          // 合併模式：與現有素材庫合併（便攜包優先，ID 相同才會覆蓋）
+          library = { ...library, ...packLibrary };
+        }
+        saveLibraryToStorage();
+      } else if (isFullOverwrite) {
+        library = {};
+        saveLibraryToStorage();
+      }
       
       // ── 步驟 4：重新整理畫面 ──
+      loadLibraryFromStorage();
       loadStateFromStorage();
       renderAll();
       
       const modeLabel = isFullOverwrite ? "完全覆寫" : "合併";
       showToast(
-        `📥 便攜包還原完成（${modeLabel}模式，包含 ${presetCount} 個設定檔）`,
+        `📥 便攜包還原完成（${modeLabel}模式，包含 ${presetCount} 個設定檔、${libraryCount} 個素材庫項目）`,
         "success"
       );
       
