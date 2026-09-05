@@ -1489,6 +1489,54 @@ function renderLibraryManagerRow(block) {
   metaEl.className = "library-manager-meta";
   metaEl.textContent = `${lineCount} 行・${usedByCount} 個欄位連結中`;
 
+  const categorySelect = document.createElement("select");
+  categorySelect.className = "library-manager-cat-select";
+  categorySelect.title = "調整這個素材庫項目所屬的分類";
+
+  const buildCategoryOptions = () => {
+    categorySelect.innerHTML = "";
+    const noneOpt = document.createElement("option");
+    noneOpt.value = "";
+    noneOpt.textContent = "🗂️ 未分類";
+    categorySelect.appendChild(noneOpt);
+
+    getCategoryDropdownOptions().forEach(cat => {
+      const opt = document.createElement("option");
+      opt.value = cat;
+      opt.textContent = cat;
+      categorySelect.appendChild(opt);
+    });
+
+    const addNewOpt = document.createElement("option");
+    addNewOpt.value = "__new__";
+    addNewOpt.textContent = "＋ 新增分類...";
+    categorySelect.appendChild(addNewOpt);
+
+    categorySelect.value = block.category || "";
+  };
+  buildCategoryOptions();
+
+  categorySelect.addEventListener("click", (e) => e.stopPropagation());
+  categorySelect.addEventListener("change", async (e) => {
+    e.stopPropagation();
+    const val = e.target.value;
+    if (val === "__new__") {
+      const newCat = await showCustomPrompt("新增分類", "請輸入新的分類名稱：", "");
+      if (newCat === null || newCat.trim() === "") {
+        categorySelect.value = block.category || "";
+        return;
+      }
+      block.category = newCat.trim();
+    } else {
+      block.category = val;
+    }
+    saveLibraryToStorage();
+    // Re-render so the item moves into its new category group
+    renderLibraryManagerList(elements.libraryManagerSearch.value);
+    renderAll();
+    showToast(`已將「${block.title}」歸類到「${block.category || UNCATEGORIZED_LABEL}」`, "success");
+  });
+
   const renameBtn = document.createElement("button");
   renameBtn.type = "button";
   renameBtn.className = "category-defaults-icon-btn";
@@ -1534,6 +1582,7 @@ function renderLibraryManagerRow(block) {
   headerRow.appendChild(expandBtn);
   headerRow.appendChild(titleEl);
   headerRow.appendChild(metaEl);
+  headerRow.appendChild(categorySelect);
   headerRow.appendChild(renameBtn);
   headerRow.appendChild(deleteBtn);
 

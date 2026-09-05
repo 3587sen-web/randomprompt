@@ -1950,6 +1950,33 @@ body.has-clipboard .btn-paste-col {
   min-width: 0;
 }
 
+.library-manager-cat-select {
+  flex-shrink: 0;
+  max-width: 130px;
+  font-size: 0.72rem;
+  padding: 3px 20px 3px 8px;
+  border-radius: 20px;
+  background-color: rgba(10, 12, 20, 0.5);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+}
+
+.library-manager-cat-select:hover {
+  border-color: var(--border-color-hover);
+  color: var(--text-main);
+}
+
+.library-manager-cat-select option {
+  background-color: #161b26;
+  color: var(--text-main);
+}
+
 .library-manager-textarea {
   width: 100%;
   min-height: 80px;
