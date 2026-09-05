@@ -1410,89 +1410,171 @@ function renderLibraryManagerList(query) {
     return;
   }
 
+  // Group by category so a large library stays browsable
+  const groups = new Map(); // category -> blocks[]
   items.forEach(block => {
-    const usedByCount = state.columns.filter(c => c.linkedBlockId === block.id).length;
-    const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
-
-    const row = document.createElement("div");
-    row.className = "library-manager-row";
-
-    const headerRow = document.createElement("div");
-    headerRow.className = "library-manager-row-header";
-
-    const titleEl = document.createElement("span");
-    titleEl.className = "library-manager-title";
-    titleEl.textContent = block.title;
-
-    const metaEl = document.createElement("span");
-    metaEl.className = "library-manager-meta";
-    metaEl.textContent = `${lineCount} 行・目前工作區有 ${usedByCount} 個欄位連結中`;
-
-    const renameBtn = document.createElement("button");
-    renameBtn.type = "button";
-    renameBtn.className = "category-defaults-icon-btn";
-    renameBtn.textContent = "✏️";
-    renameBtn.title = "重新命名這個素材庫項目";
-    renameBtn.addEventListener("click", async () => {
-      const newName = await showCustomPrompt("重新命名素材庫項目", "請輸入新名稱：", block.title);
-      if (newName === null || newName.trim() === "") return;
-      block.title = newName.trim();
-      saveLibraryToStorage();
-      renderLibraryManagerList(elements.libraryManagerSearch.value);
-      renderAll();
-    });
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "category-defaults-icon-btn danger";
-    deleteBtn.textContent = "🗑️";
-    deleteBtn.title = "刪除這個素材庫項目";
-    deleteBtn.addEventListener("click", async () => {
-      const warningMsg = usedByCount > 0
-        ? `目前工作區中有 ${usedByCount} 個欄位正在連結「${block.title}」。\n刪除後，這些欄位會自動解除連結，並把目前的內容保留在欄位自己身上（不會變空白），但之後不會再跟著素材庫同步。\n\n確定要刪除嗎？`
-        : `確定要刪除素材庫項目「${block.title}」嗎？`;
-      const confirmed = await showCustomConfirm("刪除素材庫項目", warningMsg);
-      if (!confirmed) return;
-
-      // Detach any columns in the current working session first, preserving their last content
-      state.columns.forEach(c => {
-        if (c.linkedBlockId === block.id) {
-          c.content = block.content || "";
-          c.linkedBlockId = null;
-        }
-      });
-      delete library[block.id];
-      saveLibraryToStorage();
-      saveStateToStorage();
-      renderLibraryManagerList(elements.libraryManagerSearch.value);
-      renderAll();
-      showToast(`🗑️ 已刪除素材庫項目「${block.title}」`, "success");
-    });
-
-    headerRow.appendChild(titleEl);
-    headerRow.appendChild(metaEl);
-    headerRow.appendChild(renameBtn);
-    headerRow.appendChild(deleteBtn);
-
-    const textarea = document.createElement("textarea");
-    textarea.className = "library-manager-textarea";
-    textarea.value = block.content || "";
-    textarea.placeholder = "每行輸入一個標籤/詞彙...";
-    textarea.addEventListener("input", (e) => {
-      block.content = e.target.value;
-      saveLibraryToStorage();
-      const lc = e.target.value.split("\n").map(l => l.trim()).filter(l => l !== "").length;
-      metaEl.textContent = `${lc} 行・目前工作區有 ${usedByCount} 個欄位連結中`;
-    });
-    textarea.addEventListener("change", () => {
-      renderAll(); // reflect the edit in any linked column once editing is done
-      autoGenerate();
-    });
-
-    row.appendChild(headerRow);
-    row.appendChild(textarea);
-    elements.libraryManagerList.appendChild(row);
+    const cat = block.category || UNCATEGORIZED_LABEL;
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat).push(block);
   });
+
+  const summaryBar = document.createElement("div");
+  summaryBar.className = "library-manager-summary";
+  summaryBar.textContent = `共 ${items.length} 個素材庫項目，分為 ${groups.size} 個分類`;
+  elements.libraryManagerList.appendChild(summaryBar);
+
+  // Sort groups by item count (largest first) for easier scanning
+  const sortedGroups = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  sortedGroups.forEach(([catName, blocks]) => {
+    const groupWrap = document.createElement("div");
+    groupWrap.className = "library-manager-group";
+
+    const groupHeader = document.createElement("button");
+    groupHeader.type = "button";
+    groupHeader.className = "library-manager-group-header";
+    groupHeader.innerHTML = `<span class="lmg-arrow">▸</span> ${catName} <span class="lmg-count">${blocks.length}</span>`;
+
+    const groupBody = document.createElement("div");
+    groupBody.className = "library-manager-group-body";
+    groupBody.style.display = "none";
+
+    // Auto-expand groups when actively searching, so matches are visible
+    if (q) {
+      groupBody.style.display = "flex";
+      groupHeader.classList.add("expanded");
+    }
+
+    groupHeader.addEventListener("click", () => {
+      const isOpen = groupBody.style.display !== "none";
+      groupBody.style.display = isOpen ? "none" : "flex";
+      groupHeader.classList.toggle("expanded", !isOpen);
+    });
+
+    blocks.forEach(block => {
+      groupBody.appendChild(renderLibraryManagerRow(block));
+    });
+
+    groupWrap.appendChild(groupHeader);
+    groupWrap.appendChild(groupBody);
+    elements.libraryManagerList.appendChild(groupWrap);
+  });
+}
+
+// Renders a single collapsed-by-default library item row. The textarea is
+// only created once the row is expanded, so browsing a 250+ item library
+// doesn't mean rendering 250+ live <textarea> elements (some with 1000+
+// lines) at once.
+function renderLibraryManagerRow(block) {
+  const usedByCount = state.columns.filter(c => c.linkedBlockId === block.id).length;
+  const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
+
+  const row = document.createElement("div");
+  row.className = "library-manager-row";
+
+  const headerRow = document.createElement("div");
+  headerRow.className = "library-manager-row-header";
+
+  const expandBtn = document.createElement("button");
+  expandBtn.type = "button";
+  expandBtn.className = "library-manager-expand-btn";
+  expandBtn.textContent = "▸";
+  expandBtn.title = "展開編輯內容";
+
+  const titleEl = document.createElement("span");
+  titleEl.className = "library-manager-title";
+  titleEl.textContent = block.title;
+
+  const metaEl = document.createElement("span");
+  metaEl.className = "library-manager-meta";
+  metaEl.textContent = `${lineCount} 行・${usedByCount} 個欄位連結中`;
+
+  const renameBtn = document.createElement("button");
+  renameBtn.type = "button";
+  renameBtn.className = "category-defaults-icon-btn";
+  renameBtn.textContent = "✏️";
+  renameBtn.title = "重新命名這個素材庫項目";
+  renameBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const newName = await showCustomPrompt("重新命名素材庫項目", "請輸入新名稱：", block.title);
+    if (newName === null || newName.trim() === "") return;
+    block.title = newName.trim();
+    saveLibraryToStorage();
+    renderLibraryManagerList(elements.libraryManagerSearch.value);
+    renderAll();
+  });
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "category-defaults-icon-btn danger";
+  deleteBtn.textContent = "🗑️";
+  deleteBtn.title = "刪除這個素材庫項目";
+  deleteBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const warningMsg = usedByCount > 0
+      ? `目前工作區中有 ${usedByCount} 個欄位正在連結「${block.title}」。\n刪除後，這些欄位會自動解除連結，並把目前的內容保留在欄位自己身上（不會變空白），但之後不會再跟著素材庫同步。\n\n確定要刪除嗎？`
+      : `確定要刪除素材庫項目「${block.title}」嗎？`;
+    const confirmed = await showCustomConfirm("刪除素材庫項目", warningMsg);
+    if (!confirmed) return;
+
+    state.columns.forEach(c => {
+      if (c.linkedBlockId === block.id) {
+        c.content = block.content || "";
+        c.linkedBlockId = null;
+      }
+    });
+    delete library[block.id];
+    saveLibraryToStorage();
+    saveStateToStorage();
+    renderLibraryManagerList(elements.libraryManagerSearch.value);
+    renderAll();
+    showToast(`🗑️ 已刪除素材庫項目「${block.title}」`, "success");
+  });
+
+  headerRow.appendChild(expandBtn);
+  headerRow.appendChild(titleEl);
+  headerRow.appendChild(metaEl);
+  headerRow.appendChild(renameBtn);
+  headerRow.appendChild(deleteBtn);
+
+  const bodyWrap = document.createElement("div");
+  bodyWrap.className = "library-manager-row-body";
+  bodyWrap.style.display = "none";
+  let textareaBuilt = false;
+
+  const toggleExpand = () => {
+    const opening = bodyWrap.style.display === "none";
+    if (opening && !textareaBuilt) {
+      // Lazily create the (possibly huge) textarea only on first expand
+      const textarea = document.createElement("textarea");
+      textarea.className = "library-manager-textarea";
+      textarea.value = block.content || "";
+      textarea.placeholder = "每行輸入一個標籤/詞彙...";
+      textarea.addEventListener("input", (e) => {
+        block.content = e.target.value;
+        saveLibraryToStorage();
+        const lc = e.target.value.split("\n").map(l => l.trim()).filter(l => l !== "").length;
+        metaEl.textContent = `${lc} 行・${usedByCount} 個欄位連結中`;
+      });
+      textarea.addEventListener("change", () => {
+        renderAll();
+        autoGenerate();
+      });
+      bodyWrap.appendChild(textarea);
+      textareaBuilt = true;
+    }
+    bodyWrap.style.display = opening ? "block" : "none";
+    expandBtn.textContent = opening ? "▾" : "▸";
+  };
+
+  headerRow.addEventListener("click", (e) => {
+    if (e.target === renameBtn || e.target === deleteBtn) return;
+    toggleExpand();
+  });
+
+  row.appendChild(headerRow);
+  row.appendChild(bodyWrap);
+  return row;
 }
 
 // Storage prefix
