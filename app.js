@@ -1430,6 +1430,9 @@ function renderLibraryManagerList(query) {
     const groupWrap = document.createElement("div");
     groupWrap.className = "library-manager-group";
 
+    const groupHeaderRow = document.createElement("div");
+    groupHeaderRow.className = "library-manager-group-header-row";
+
     const groupHeader = document.createElement("button");
     groupHeader.type = "button";
     groupHeader.className = "library-manager-group-header";
@@ -1451,11 +1454,58 @@ function renderLibraryManagerList(query) {
       groupHeader.classList.toggle("expanded", !isOpen);
     });
 
+    groupHeaderRow.appendChild(groupHeader);
+
+    // "未分類" is a pseudo-group (empty category), not a real one to rename/remove
+    if (catName !== UNCATEGORIZED_LABEL) {
+      const renameGroupBtn = document.createElement("button");
+      renameGroupBtn.type = "button";
+      renameGroupBtn.className = "library-manager-group-icon-btn";
+      renameGroupBtn.textContent = "✏️";
+      renameGroupBtn.title = "重新命名這個分類（只影響素材庫項目的分類）";
+      renameGroupBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const newName = await showCustomPrompt("重新命名分類", `將素材庫的「${catName}」分類重新命名為：`, catName);
+        if (newName === null) return;
+        const trimmed = newName.trim();
+        if (trimmed === "" || trimmed === catName) return;
+        Object.values(library).forEach(b => {
+          if ((b.category || "") === catName) b.category = trimmed;
+        });
+        saveLibraryToStorage();
+        renderLibraryManagerList(elements.libraryManagerSearch.value);
+        showToast(`已將素材庫分類「${catName}」重新命名為「${trimmed}」`, "success");
+      });
+
+      const removeGroupBtn = document.createElement("button");
+      removeGroupBtn.type = "button";
+      removeGroupBtn.className = "library-manager-group-icon-btn danger";
+      removeGroupBtn.textContent = "🗑️";
+      removeGroupBtn.title = "移除這個分類（項目會變成未分類，項目本身不會被刪除）";
+      removeGroupBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const confirmed = await showCustomConfirm(
+          "移除分類",
+          `確定要移除素材庫的「${catName}」分類嗎？\n這個分類底下的 ${blocks.length} 個項目會變成「未分類」，項目本身不會被刪除。`
+        );
+        if (!confirmed) return;
+        Object.values(library).forEach(b => {
+          if ((b.category || "") === catName) b.category = "";
+        });
+        saveLibraryToStorage();
+        renderLibraryManagerList(elements.libraryManagerSearch.value);
+        showToast(`已移除素材庫分類「${catName}」，項目已改為未分類`, "success");
+      });
+
+      groupHeaderRow.appendChild(renameGroupBtn);
+      groupHeaderRow.appendChild(removeGroupBtn);
+    }
+
     blocks.forEach(block => {
       groupBody.appendChild(renderLibraryManagerRow(block));
     });
 
-    groupWrap.appendChild(groupHeader);
+    groupWrap.appendChild(groupHeaderRow);
     groupWrap.appendChild(groupBody);
     elements.libraryManagerList.appendChild(groupWrap);
   });
