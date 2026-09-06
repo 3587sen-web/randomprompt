@@ -1315,6 +1315,60 @@ function createLibraryBlock(title, category, content) {
   return id;
 }
 
+// Bulk-link every currently unlinked column whose title EXACTLY matches an
+// existing library item's title — saves clicking "🔗 連結素材庫" one column
+// at a time when a new theme reuses a lot of already-catalogued item names.
+async function autoLinkColumnsByTitle() {
+  // Build a lookup of library items by exact title (skip ambiguous titles
+  // that match more than one library item — those need a manual/deliberate pick)
+  const byTitle = new Map();
+  const ambiguous = new Set();
+  Object.values(library).forEach(block => {
+    const t = block.title.trim();
+    if (!t) return;
+    if (byTitle.has(t)) {
+      ambiguous.add(t);
+    } else {
+      byTitle.set(t, block);
+    }
+  });
+
+  const matches = [];
+  state.columns.forEach(col => {
+    if (col.linkedBlockId) return; // already linked, skip
+    const t = (col.title || "").trim();
+    if (!t || ambiguous.has(t)) return;
+    const block = byTitle.get(t);
+    if (block) matches.push({ col, block });
+  });
+
+  if (matches.length === 0) {
+    const ambiguousNote = ambiguous.size > 0
+      ? `（有 ${ambiguous.size} 個標題在素材庫中對應到多個項目，這種需要手動挑選，已略過）`
+      : "";
+    showToast(`沒有找到標題完全相符、且尚未連結的欄位可以自動比對${ambiguousNote}`, "error");
+    return;
+  }
+
+  const previewNames = matches.slice(0, 8).map(m => `「${m.col.title}」`).join("、");
+  const moreNote = matches.length > 8 ? ` 等共 ${matches.length} 個` : "";
+  const confirmed = await showCustomConfirm(
+    "自動比對連結",
+    `找到 ${matches.length} 個欄位的標題跟素材庫項目完全相符：\n${previewNames}${moreNote}\n\n確定要全部自動連結嗎？連結後這些欄位的內容會改用素材庫的內容。`
+  );
+  if (!confirmed) return;
+
+  matches.forEach(({ col, block }) => {
+    col.linkedBlockId = block.id;
+    col.content = "";
+  });
+
+  saveStateToStorage();
+  renderAll();
+  autoGenerate();
+  showToast(`🪄 已自動連結 ${matches.length} 個欄位到素材庫`, "success");
+}
+
 // ---------------------------------
 // Library Picker (link a column to an existing library block)
 // ---------------------------------
@@ -1356,35 +1410,72 @@ function renderLibraryPickerList(query) {
     return;
   }
 
+  // Group by category so you can browse by clicking instead of only typing a search
+  const groups = new Map();
   items.forEach(block => {
-    const row = document.createElement("div");
-    row.className = "library-picker-row";
+    const cat = block.category || UNCATEGORIZED_LABEL;
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat).push(block);
+  });
+  const sortedGroups = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
 
-    const info = document.createElement("div");
-    info.className = "library-picker-info";
-    const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
-    info.innerHTML = `<span class="library-picker-title">${block.title}</span>` +
-      (block.category ? `<span class="library-picker-cat">${block.category}</span>` : "") +
-      `<span class="library-picker-count">${lineCount} 行</span>`;
+  sortedGroups.forEach(([catName, blocks]) => {
+    const groupWrap = document.createElement("div");
+    groupWrap.className = "library-manager-group";
 
-    const selectBtn = document.createElement("button");
-    selectBtn.type = "button";
-    selectBtn.className = "btn btn-primary btn-sm";
-    selectBtn.textContent = "連結這一項";
-    selectBtn.addEventListener("click", () => {
-      if (!libraryPickerTargetCol) return;
-      libraryPickerTargetCol.linkedBlockId = block.id;
-      libraryPickerTargetCol.content = ""; // library content is now the source of truth
-      saveStateToStorage();
-      closeAllOverlayModals();
-      renderAll();
-      autoGenerate();
-      showToast(`🔗 已將欄位連結到素材庫項目「${block.title}」`, "success");
+    const groupHeader = document.createElement("button");
+    groupHeader.type = "button";
+    groupHeader.className = "library-manager-group-header";
+    groupHeader.innerHTML = `<span class="lmg-arrow">▸</span> ${catName} <span class="lmg-count">${blocks.length}</span>`;
+
+    const groupBody = document.createElement("div");
+    groupBody.className = "library-manager-group-body";
+    groupBody.style.display = "none";
+
+    if (q) {
+      groupBody.style.display = "flex";
+      groupHeader.classList.add("expanded");
+    }
+
+    groupHeader.addEventListener("click", () => {
+      const isOpen = groupBody.style.display !== "none";
+      groupBody.style.display = isOpen ? "none" : "flex";
+      groupHeader.classList.toggle("expanded", !isOpen);
     });
 
-    row.appendChild(info);
-    row.appendChild(selectBtn);
-    elements.libraryPickerList.appendChild(row);
+    blocks.forEach(block => {
+      const row = document.createElement("div");
+      row.className = "library-picker-row";
+
+      const info = document.createElement("div");
+      info.className = "library-picker-info";
+      const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
+      info.innerHTML = `<span class="library-picker-title">${block.title}</span>` +
+        `<span class="library-picker-count">${lineCount} 行</span>`;
+
+      const selectBtn = document.createElement("button");
+      selectBtn.type = "button";
+      selectBtn.className = "btn btn-primary btn-sm";
+      selectBtn.textContent = "連結這一項";
+      selectBtn.addEventListener("click", () => {
+        if (!libraryPickerTargetCol) return;
+        libraryPickerTargetCol.linkedBlockId = block.id;
+        libraryPickerTargetCol.content = ""; // library content is now the source of truth
+        saveStateToStorage();
+        closeAllOverlayModals();
+        renderAll();
+        autoGenerate();
+        showToast(`🔗 已將欄位連結到素材庫項目「${block.title}」`, "success");
+      });
+
+      row.appendChild(info);
+      row.appendChild(selectBtn);
+      groupBody.appendChild(row);
+    });
+
+    groupWrap.appendChild(groupHeader);
+    groupWrap.appendChild(groupBody);
+    elements.libraryPickerList.appendChild(groupWrap);
   });
 }
 
@@ -1928,6 +2019,7 @@ function initElements() {
     btnClearSelection: document.getElementById("btnClearSelection"),
     columnsGrid: document.getElementById("columnsGrid"),
     categoryTabsBar: document.getElementById("categoryTabsBar"),
+    columnTitleDatalist: document.getElementById("columnTitleDatalist"),
     btnCategoryDefaults: document.getElementById("btnCategoryDefaults"),
     categoryDefaultsModal: document.getElementById("categoryDefaultsModal"),
     categoryDefaultsList: document.getElementById("categoryDefaultsList"),
@@ -1935,6 +2027,7 @@ function initElements() {
     categoryDefaultsCloseBtn: document.getElementById("categoryDefaultsCloseBtn"),
     btnAddPresetCategory: document.getElementById("btnAddPresetCategory"),
     btnLibraryManager: document.getElementById("btnLibraryManager"),
+    btnAutoLinkByTitle: document.getElementById("btnAutoLinkByTitle"),
     libraryPickerModal: document.getElementById("libraryPickerModal"),
     libraryPickerSearch: document.getElementById("libraryPickerSearch"),
     libraryPickerList: document.getElementById("libraryPickerList"),
@@ -2092,6 +2185,9 @@ function bindGlobalEvents() {
       openOverlayModal(elements.libraryManagerModal);
     });
   }
+  if (elements.btnAutoLinkByTitle) {
+    elements.btnAutoLinkByTitle.addEventListener("click", autoLinkColumnsByTitle);
+  }
   if (elements.libraryManagerCloseX) {
     elements.libraryManagerCloseX.addEventListener("click", () => closeOverlayModal(elements.libraryManagerModal));
   }
@@ -2193,11 +2289,30 @@ function bindGlobalEvents() {
 function renderAll() {
   state.columns.forEach(ensureColumnDefaults);
   renderCategoryTabs();
+  renderColumnTitleDatalist();
   renderColumnsGrid();
   renderAlwaysTagsList();
   renderPresetsDropdown();
   updateHeaderStates();
   updateColumnJumpSelect();
+}
+
+// Populate the shared <datalist> that powers column-title autocomplete:
+// every library item's title, plus every title already used by a column in
+// the current working set. Lets you type a few characters and reuse a name
+// you've already established, instead of retyping it from scratch each time.
+function renderColumnTitleDatalist() {
+  if (!elements.columnTitleDatalist) return;
+  const seen = new Set();
+  Object.values(library).forEach(b => { if (b.title) seen.add(b.title.trim()); });
+  state.columns.forEach(c => { if (c.title) seen.add(c.title.trim()); });
+
+  elements.columnTitleDatalist.innerHTML = "";
+  [...seen].sort((a, b) => a.localeCompare(b, "zh-Hant")).forEach(title => {
+    const opt = document.createElement("option");
+    opt.value = title;
+    elements.columnTitleDatalist.appendChild(opt);
+  });
 }
 
 // Render the category tab bar above the columns grid
@@ -2595,10 +2710,30 @@ function renderColumnsGrid() {
     titleInput.type = "text";
     titleInput.value = col.title;
     titleInput.placeholder = `欄位 ${index + 1}`;
+    titleInput.setAttribute("list", "columnTitleDatalist");
+    titleInput.setAttribute("autocomplete", "off");
     titleInput.addEventListener("input", (e) => {
       col.title = e.target.value;
       saveStateToStorage();
       autoGenerate();
+    });
+    titleInput.addEventListener("change", async (e) => {
+      const finalTitle = e.target.value.trim();
+      if (!finalTitle || col.linkedBlockId) return;
+      const matchingBlock = Object.values(library).find(b => b.title.trim() === finalTitle);
+      if (!matchingBlock) return;
+      const lineCount = (matchingBlock.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
+      const confirmed = await showCustomConfirm(
+        "發現同名素材庫項目",
+        `素材庫裡已經有「${finalTitle}」這個項目（${lineCount} 行），要直接連結使用嗎？\n選「取消」的話，這個欄位會維持你自己輸入的內容，不受影響。`
+      );
+      if (!confirmed) return;
+      col.linkedBlockId = matchingBlock.id;
+      col.content = "";
+      saveStateToStorage();
+      renderAll();
+      autoGenerate();
+      showToast(`🔗 已連結到素材庫項目「${finalTitle}」`, "success");
     });
     
     titleContainer.appendChild(selectCheckbox);

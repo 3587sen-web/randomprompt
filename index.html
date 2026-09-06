@@ -127,6 +127,7 @@
         </div>
         <button type="button" class="btn-hdr-toggle" id="btnCategoryDefaults" title="查看/調整每個分類的預設優先權，之後新增欄位會套用">⚙️ 分類優先權</button>
         <button type="button" class="btn-hdr-toggle" id="btnLibraryManager" title="瀏覽/改名/編輯/刪除共用素材庫項目">🔗 素材庫</button>
+        <button type="button" class="btn-hdr-toggle" id="btnAutoLinkByTitle" title="掃描目前所有欄位，標題跟素材庫項目完全相同的自動一次連結，不用一個個手動連">🪄 自動比對連結</button>
       </div>
 
       <!-- Category Default Priority management panel -->
@@ -188,6 +189,7 @@
         </div>
       </div>
 
+      <datalist id="columnTitleDatalist"></datalist>
       <div class="columns-grid" id="columnsGrid">
         <!-- Rendered dynamically by app.js -->
       </div>
