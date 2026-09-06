@@ -1920,21 +1920,27 @@ let activeCategoryTab = "__all__";
 const UNCATEGORIZED_LABEL = "未分類";
 
 // System-suggested starting values (only used the FIRST time a category is
-// seen, before the user has ever customized it). Based on general
-// image-generation prompt ordering conventions (subject > pose > outfit >
-// details > scene > technical).
+// seen, before the user has ever customized it). Based on the mainstream
+// 2026 AI image-generation prompt ordering convention confirmed across
+// Midjourney/SD/Flux/DALL-E guides: Subject (incl. count/pose/appearance)
+// > Setting/Background > Style > Composition/Camera > Technical params.
 const SYSTEM_SUGGESTED_CATEGORY_PRIORITY = {
+  // Tier 1 — Subject: who/what/how many, defines the main focus
   "身份型": 100,
-  "姿勢動作": 90,
+  "數量": 95,
+  "五官細節": 90,
+  "姿勢動作": 85,
   "服裝穿搭": 80,
-  "五官細節": 70,
-  "配件": 60,
-  "背景": 50,
-  "鏡頭構圖": 40,
-  "比例結構": 30,
-  "畫風": 20,
-  "技術參數": 10,
-  "數量": 5
+  "配件": 75,
+  // Tier 2 — Setting / environment
+  "背景": 60,
+  // Tier 3 — Style
+  "畫風": 45,
+  // Tier 4 — Composition / camera
+  "鏡頭構圖": 30,
+  "比例結構": 25,
+  // Tier 5 — Technical parameters (last)
+  "技術參數": 10
 };
 
 // User-adjustable, PERSISTED per-category default priority. Stored in
@@ -2214,6 +2220,7 @@ function initElements() {
 
     // New features
     btnResetDefault:       document.getElementById("btnResetDefault"),
+    btnStandardSkeleton:   document.getElementById("btnStandardSkeleton"),
     btnDuplicatePreset:    document.getElementById("btnDuplicatePreset"),
     colJumpSelect:         document.getElementById("colJumpSelect"),
     btnToggleAllActive:    document.getElementById("btnToggleAllActive"),
@@ -2250,6 +2257,9 @@ function bindGlobalEvents() {
   elements.btnPrefill.addEventListener("click", prefillDefault);
   elements.btnAddNewCol.addEventListener("click", addNewColumn);
   elements.btnResetDefault.addEventListener("click", resetToDefault);
+  if (elements.btnStandardSkeleton) {
+    elements.btnStandardSkeleton.addEventListener("click", buildStandardSkeleton);
+  }
   elements.btnEmptyContent.addEventListener("click", emptyAllContents);
   elements.btnClearTitles.addEventListener("click", clearAllTitles);
   
@@ -3775,6 +3785,42 @@ async function resetToDefault() {
   saveStateToStorage();
   renderAll();
   showToast("⬜ 已重設為 5 個空白欄位", "success");
+  autoGenerate();
+}
+
+// The canonical category order this app treats as "mainstream standard" for
+// image-gen prompts: Subject (who/what/how many) > Setting > Style >
+// Composition/Camera > Technical params. Matches SYSTEM_SUGGESTED_CATEGORY_PRIORITY.
+const STANDARD_SKELETON_CATEGORIES = [
+  "身份型", "數量", "五官細節", "姿勢動作", "服裝穿搭", "配件",
+  "背景", "畫風", "鏡頭構圖", "比例結構", "技術參數"
+];
+
+async function buildStandardSkeleton() {
+  const confirmReset = await showCustomConfirm(
+    "建立標準骨架",
+    `將清除目前所有欄位，改建立 ${STANDARD_SKELETON_CATEGORIES.length} 個分類的空白欄位（依主流生成優先順序排列：主體 > 場景 > 畫風 > 構圖 > 技術參數），此操作無法復原。確定要繼續嗎？`,
+    true
+  );
+  if (!confirmReset) return;
+
+  state.columns = STANDARD_SKELETON_CATEGORIES.map((cat, i) => ({
+    id: Date.now() + i * 10,
+    title: cat,
+    content: "",
+    active: true,
+    lockedValue: null,
+    noRepeat: false,
+    usedValues: [],
+    category: cat,
+    priority: getDefaultPriorityForCategory(cat),
+    linkedBlockId: null
+  }));
+  activeCategoryTab = "__all__";
+  state.columnCount = state.columns.length;
+  saveStateToStorage();
+  renderAll();
+  showToast(`🏗️ 已建立 ${STANDARD_SKELETON_CATEGORIES.length} 個分類的標準骨架，可自行填入內容或連結素材庫`, "success");
   autoGenerate();
 }
 
