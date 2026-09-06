@@ -1787,7 +1787,8 @@ body.has-clipboard .btn-paste-col {
 
 /* Library Picker modal */
 #libraryPickerModal .modal-content,
-#libraryManagerModal .modal-content {
+#libraryManagerModal .modal-content,
+#libraryBatchAddModal .modal-content {
   max-width: 600px;
 }
 
@@ -1818,6 +1819,32 @@ body.has-clipboard .btn-paste-col {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: 6px;
+}
+
+.library-batch-row {
+  cursor: pointer;
+  justify-content: flex-start;
+  transition: all var(--transition-fast);
+}
+
+.library-batch-row:hover {
+  border-color: var(--border-color-hover);
+  background: rgba(0, 242, 254, 0.05);
+}
+
+.library-batch-checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--text-highlight);
+  cursor: pointer;
+}
+
+.library-batch-selected-count {
+  font-size: 0.8rem;
+  color: var(--text-highlight);
+  font-weight: 600;
+  margin-right: auto;
 }
 
 .library-picker-info {

@@ -128,6 +128,7 @@
         <button type="button" class="btn-hdr-toggle" id="btnCategoryDefaults" title="查看/調整每個分類的預設優先權，之後新增欄位會套用">⚙️ 分類優先權</button>
         <button type="button" class="btn-hdr-toggle" id="btnLibraryManager" title="瀏覽/改名/編輯/刪除共用素材庫項目">🔗 素材庫</button>
         <button type="button" class="btn-hdr-toggle" id="btnAutoLinkByTitle" title="掃描目前所有欄位，標題跟素材庫項目完全相同的自動一次連結，不用一個個手動連">🪄 自動比對連結</button>
+        <button type="button" class="btn-hdr-toggle" id="btnBatchAddFromLibrary" title="從素材庫勾選多個項目，一次新增對應數量的欄位並自動連結">📦 批次加入主題</button>
       </div>
 
       <!-- Category Default Priority management panel -->
@@ -165,6 +166,28 @@
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" id="libraryPickerCloseBtn">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Batch Add From Library modal (multi-select -> auto-create linked columns) -->
+      <div class="modal-overlay" id="libraryBatchAddModal">
+        <div class="modal-content glass">
+          <div class="modal-header">
+            <h3>從素材庫批次加入欄位</h3>
+            <button class="modal-close" id="libraryBatchAddCloseX">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p class="category-defaults-hint">勾選要加入這個主題的素材庫項目，確認後會自動新增對應數量的欄位，標題、分類都會沿用素材庫項目、並直接連結好。</p>
+            <input type="text" id="libraryBatchAddSearch" class="modal-input" placeholder="輸入關鍵字搜尋素材庫項目...">
+            <div class="library-picker-list" id="libraryBatchAddList">
+              <!-- Rendered dynamically by app.js -->
+            </div>
+          </div>
+          <div class="modal-footer">
+            <span class="library-batch-selected-count" id="libraryBatchSelectedCount">已選 0 項</span>
+            <button class="btn btn-secondary" id="libraryBatchAddCloseBtn">取消</button>
+            <button class="btn btn-primary" id="libraryBatchAddConfirmBtn">加入主題</button>
           </div>
         </div>
       </div>

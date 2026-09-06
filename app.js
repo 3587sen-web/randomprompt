@@ -1370,6 +1370,146 @@ async function autoLinkColumnsByTitle() {
 }
 
 // ---------------------------------
+// Batch Add From Library (multi-select library items -> auto-create that
+// many new, already-linked columns in one go)
+// ---------------------------------
+let libraryBatchSelectedIds = new Set();
+
+function updateLibraryBatchSelectedCount() {
+  if (elements.libraryBatchSelectedCount) {
+    elements.libraryBatchSelectedCount.textContent = `已選 ${libraryBatchSelectedIds.size} 項`;
+  }
+}
+
+function renderLibraryBatchAddList(query) {
+  if (!elements.libraryBatchAddList) return;
+  elements.libraryBatchAddList.innerHTML = "";
+
+  const q = (query || "").trim().toLowerCase();
+  const items = Object.values(library)
+    .filter(b => !q || b.title.toLowerCase().includes(q) || b.category.toLowerCase().includes(q))
+    .sort((a, b) => a.title.localeCompare(b.title, "zh-Hant"));
+
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "category-defaults-empty";
+    empty.textContent = Object.keys(library).length === 0
+      ? "素材庫目前還是空的，先用某個欄位的「📤 另存為素材庫項目」建立第一個項目吧。"
+      : "沒有符合關鍵字的素材庫項目";
+    elements.libraryBatchAddList.appendChild(empty);
+    return;
+  }
+
+  const groups = new Map();
+  items.forEach(block => {
+    const cat = block.category || UNCATEGORIZED_LABEL;
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat).push(block);
+  });
+  const sortedGroups = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  sortedGroups.forEach(([catName, blocks]) => {
+    const groupWrap = document.createElement("div");
+    groupWrap.className = "library-manager-group";
+
+    const selectedInGroup = blocks.filter(b => libraryBatchSelectedIds.has(b.id)).length;
+    const groupHeader = document.createElement("button");
+    groupHeader.type = "button";
+    groupHeader.className = "library-manager-group-header";
+    groupHeader.innerHTML = `<span class="lmg-arrow">▸</span> ${catName} <span class="lmg-count">${selectedInGroup > 0 ? `${selectedInGroup}/` : ""}${blocks.length}</span>`;
+
+    const groupBody = document.createElement("div");
+    groupBody.className = "library-manager-group-body";
+    groupBody.style.display = "none";
+
+    if (q || selectedInGroup > 0) {
+      groupBody.style.display = "flex";
+      groupHeader.classList.add("expanded");
+    }
+
+    groupHeader.addEventListener("click", () => {
+      const isOpen = groupBody.style.display !== "none";
+      groupBody.style.display = isOpen ? "none" : "flex";
+      groupHeader.classList.toggle("expanded", !isOpen);
+    });
+
+    blocks.forEach(block => {
+      const row = document.createElement("label");
+      row.className = "library-picker-row library-batch-row";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "library-batch-checkbox";
+      checkbox.checked = libraryBatchSelectedIds.has(block.id);
+      checkbox.addEventListener("change", (e) => {
+        if (e.target.checked) libraryBatchSelectedIds.add(block.id);
+        else libraryBatchSelectedIds.delete(block.id);
+        updateLibraryBatchSelectedCount();
+        const total = blocks.filter(b => libraryBatchSelectedIds.has(b.id)).length;
+        groupHeader.innerHTML = `<span class="lmg-arrow">▸</span> ${catName} <span class="lmg-count">${total > 0 ? `${total}/` : ""}${blocks.length}</span>`;
+      });
+
+      const info = document.createElement("div");
+      info.className = "library-picker-info";
+      const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
+      info.innerHTML = `<span class="library-picker-title">${block.title}</span>` +
+        `<span class="library-picker-count">${lineCount} 行</span>`;
+
+      row.appendChild(checkbox);
+      row.appendChild(info);
+      groupBody.appendChild(row);
+    });
+
+    groupWrap.appendChild(groupHeader);
+    groupWrap.appendChild(groupBody);
+    elements.libraryBatchAddList.appendChild(groupWrap);
+  });
+}
+
+async function confirmLibraryBatchAdd() {
+  if (libraryBatchSelectedIds.size === 0) {
+    showToast("請先勾選至少一個素材庫項目", "error");
+    return;
+  }
+
+  const selectedBlocks = [...libraryBatchSelectedIds]
+    .map(id => library[id])
+    .filter(Boolean);
+
+  if (state.columnCount + selectedBlocks.length > 500) {
+    showToast(`加入這 ${selectedBlocks.length} 個項目會超過欄位上限 500 個，請先減少勾選數量`, "error");
+    return;
+  }
+
+  const confirmed = await showCustomConfirm(
+    "批次加入主題",
+    `確定要新增 ${selectedBlocks.length} 個欄位嗎？每個欄位會直接以素材庫項目的名稱／分類建立，並自動連結好。`
+  );
+  if (!confirmed) return;
+
+  selectedBlocks.forEach((block, i) => {
+    state.columns.push({
+      id: Date.now() + i * 10 + Math.floor(Math.random() * 1000),
+      title: block.title,
+      content: "",
+      active: true,
+      lockedValue: null,
+      category: block.category || "",
+      priority: getDefaultPriorityForCategory(block.category),
+      linkedBlockId: block.id
+    });
+  });
+  state.columnCount = state.columns.length;
+
+  saveStateToStorage();
+  closeAllOverlayModals();
+  libraryBatchSelectedIds.clear();
+  renderAll();
+  autoGenerate();
+  showToast(`📦 已新增 ${selectedBlocks.length} 個欄位並自動連結完成`, "success");
+}
+
+// ---------------------------------
 // Library Picker (link a column to an existing library block)
 // ---------------------------------
 let libraryPickerTargetCol = null;
@@ -1384,7 +1524,7 @@ function openLibraryPicker(col, card) {
 }
 
 function closeAllOverlayModals() {
-  [elements.libraryPickerModal, elements.libraryManagerModal].forEach(modalEl => {
+  [elements.libraryPickerModal, elements.libraryManagerModal, elements.libraryBatchAddModal].forEach(modalEl => {
     if (!modalEl) return;
     modalEl.classList.remove("active");
     setTimeout(() => { modalEl.style.display = "none"; }, 250);
@@ -2028,6 +2168,14 @@ function initElements() {
     btnAddPresetCategory: document.getElementById("btnAddPresetCategory"),
     btnLibraryManager: document.getElementById("btnLibraryManager"),
     btnAutoLinkByTitle: document.getElementById("btnAutoLinkByTitle"),
+    btnBatchAddFromLibrary: document.getElementById("btnBatchAddFromLibrary"),
+    libraryBatchAddModal: document.getElementById("libraryBatchAddModal"),
+    libraryBatchAddSearch: document.getElementById("libraryBatchAddSearch"),
+    libraryBatchAddList: document.getElementById("libraryBatchAddList"),
+    libraryBatchAddCloseX: document.getElementById("libraryBatchAddCloseX"),
+    libraryBatchAddCloseBtn: document.getElementById("libraryBatchAddCloseBtn"),
+    libraryBatchAddConfirmBtn: document.getElementById("libraryBatchAddConfirmBtn"),
+    libraryBatchSelectedCount: document.getElementById("libraryBatchSelectedCount"),
     libraryPickerModal: document.getElementById("libraryPickerModal"),
     libraryPickerSearch: document.getElementById("libraryPickerSearch"),
     libraryPickerList: document.getElementById("libraryPickerList"),
@@ -2187,6 +2335,36 @@ function bindGlobalEvents() {
   }
   if (elements.btnAutoLinkByTitle) {
     elements.btnAutoLinkByTitle.addEventListener("click", autoLinkColumnsByTitle);
+  }
+
+  // Batch Add From Library modal
+  if (elements.btnBatchAddFromLibrary) {
+    elements.btnBatchAddFromLibrary.addEventListener("click", () => {
+      libraryBatchSelectedIds.clear();
+      elements.libraryBatchAddSearch.value = "";
+      renderLibraryBatchAddList("");
+      updateLibraryBatchSelectedCount();
+      openOverlayModal(elements.libraryBatchAddModal);
+    });
+  }
+  if (elements.libraryBatchAddCloseX) {
+    elements.libraryBatchAddCloseX.addEventListener("click", () => closeOverlayModal(elements.libraryBatchAddModal));
+  }
+  if (elements.libraryBatchAddCloseBtn) {
+    elements.libraryBatchAddCloseBtn.addEventListener("click", () => closeOverlayModal(elements.libraryBatchAddModal));
+  }
+  if (elements.libraryBatchAddModal) {
+    elements.libraryBatchAddModal.addEventListener("click", (e) => {
+      if (e.target === elements.libraryBatchAddModal) closeOverlayModal(elements.libraryBatchAddModal);
+    });
+  }
+  if (elements.libraryBatchAddSearch) {
+    elements.libraryBatchAddSearch.addEventListener("input", (e) => {
+      renderLibraryBatchAddList(e.target.value);
+    });
+  }
+  if (elements.libraryBatchAddConfirmBtn) {
+    elements.libraryBatchAddConfirmBtn.addEventListener("click", confirmLibraryBatchAdd);
   }
   if (elements.libraryManagerCloseX) {
     elements.libraryManagerCloseX.addEventListener("click", () => closeOverlayModal(elements.libraryManagerModal));
