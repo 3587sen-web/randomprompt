@@ -2148,7 +2148,6 @@ function initElements() {
     decGenCount: document.getElementById("decGenCount"),
     incGenCount: document.getElementById("incGenCount"),
     btnPrefill: document.getElementById("btnPrefill"),
-    btnAddNewCol: document.getElementById("btnAddNewCol"),
     btnEmptyContent: document.getElementById("btnEmptyContent"),
     btnClearTitles: document.getElementById("btnClearTitles"),
     toggleTitles: document.getElementById("toggleTitles"),
@@ -2220,7 +2219,6 @@ function initElements() {
 
     // New features
     btnResetDefault:       document.getElementById("btnResetDefault"),
-    btnStandardSkeleton:   document.getElementById("btnStandardSkeleton"),
     btnDuplicatePreset:    document.getElementById("btnDuplicatePreset"),
     colJumpSelect:         document.getElementById("colJumpSelect"),
     btnToggleAllActive:    document.getElementById("btnToggleAllActive"),
@@ -2255,11 +2253,7 @@ function bindGlobalEvents() {
   
   // Top Buttons
   elements.btnPrefill.addEventListener("click", prefillDefault);
-  elements.btnAddNewCol.addEventListener("click", addNewColumn);
   elements.btnResetDefault.addEventListener("click", resetToDefault);
-  if (elements.btnStandardSkeleton) {
-    elements.btnStandardSkeleton.addEventListener("click", buildStandardSkeleton);
-  }
   elements.btnEmptyContent.addEventListener("click", emptyAllContents);
   elements.btnClearTitles.addEventListener("click", clearAllTitles);
   
@@ -3788,42 +3782,6 @@ async function resetToDefault() {
   autoGenerate();
 }
 
-// The canonical category order this app treats as "mainstream standard" for
-// image-gen prompts: Subject (who/what/how many) > Setting > Style >
-// Composition/Camera > Technical params. Matches SYSTEM_SUGGESTED_CATEGORY_PRIORITY.
-const STANDARD_SKELETON_CATEGORIES = [
-  "身份型", "數量", "五官細節", "姿勢動作", "服裝穿搭", "配件",
-  "背景", "畫風", "鏡頭構圖", "比例結構", "技術參數"
-];
-
-async function buildStandardSkeleton() {
-  const confirmReset = await showCustomConfirm(
-    "建立標準骨架",
-    `將清除目前所有欄位，改建立 ${STANDARD_SKELETON_CATEGORIES.length} 個分類的空白欄位（依主流生成優先順序排列：主體 > 場景 > 畫風 > 構圖 > 技術參數），此操作無法復原。確定要繼續嗎？`,
-    true
-  );
-  if (!confirmReset) return;
-
-  state.columns = STANDARD_SKELETON_CATEGORIES.map((cat, i) => ({
-    id: Date.now() + i * 10,
-    title: cat,
-    content: "",
-    active: true,
-    lockedValue: null,
-    noRepeat: false,
-    usedValues: [],
-    category: cat,
-    priority: getDefaultPriorityForCategory(cat),
-    linkedBlockId: null
-  }));
-  activeCategoryTab = "__all__";
-  state.columnCount = state.columns.length;
-  saveStateToStorage();
-  renderAll();
-  showToast(`🏗️ 已建立 ${STANDARD_SKELETON_CATEGORIES.length} 個分類的標準骨架，可自行填入內容或連結素材庫`, "success");
-  autoGenerate();
-}
-
 // ---------------------------------
 // Duplicate Selected Preset
 // ---------------------------------
@@ -3984,15 +3942,6 @@ function exportSinglePreset() {
   }, 100);
 
   showToast(`📤 設定檔「${name}」已單獨匯出（已將素材庫連結展開成完整內容，可獨立使用）`, "success");
-}
-
-function addNewColumn() {
-  if (state.columnCount >= 500) {
-    showToast("已達最高欄位上限 500 個", "error");
-    return;
-  }
-  setColCount(state.columnCount + 1);
-  showToast("已新增一個新欄位", "success");
 }
 
 async function removeColumn(index) {
