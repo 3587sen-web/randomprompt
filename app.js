@@ -2135,6 +2135,8 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // Render initially
   renderAll();
+  renderBackupStatus();
+  maybeRemindBackup();
 });
 
 // Cache elements
@@ -2224,11 +2226,21 @@ function initElements() {
     btnToggleAllActive:    document.getElementById("btnToggleAllActive"),
     btnToggleAllNoRepeat:  document.getElementById("btnToggleAllNoRepeat"),
 
-    // FAB quick copy
-    fabQuickCopy:  document.getElementById("fabQuickCopy"),
-    fabPreviewText: document.getElementById("fabPreviewText"),
-    fabCopyBtn:    document.getElementById("fabCopyBtn"),
-    fabCloseBtn:   document.getElementById("fabCloseBtn")
+    // Bottom action dock
+    dockPreview:       document.getElementById("dockPreview"),
+    dockPreviewText:   document.getElementById("dockPreviewText"),
+    dockShortcutHint:  document.getElementById("dockShortcutHint"),
+    outputSection:     document.getElementById("outputSection"),
+
+    // Menus
+    btnHeaderMenu:  document.getElementById("btnHeaderMenu"),
+    headerMenu:     document.getElementById("headerMenu"),
+    btnPresetMenu:  document.getElementById("btnPresetMenu"),
+    presetMenu:     document.getElementById("presetMenu"),
+    cardMenuPortal: document.getElementById("cardMenuPortal"),
+
+    // Backup
+    backupStatus: document.getElementById("backupStatus")
   };
 }
 
@@ -2439,20 +2451,21 @@ function bindGlobalEvents() {
   elements.btnCopyText.addEventListener("click", copyPromptText);
   elements.btnCopyJson.addEventListener("click", copyPromptJson);
   
-  // FAB quick copy
-  elements.fabCopyBtn.addEventListener("click", () => {
-    const text = elements.fabQuickCopy.dataset.fullText || "";
-    if (!text) return;
-    copyToClipboard(text);
-    elements.fabCopyBtn.classList.add("copied");
-    elements.fabCopyBtn.querySelector(".fab-label").textContent = "已複製!";
-    setTimeout(() => {
-      elements.fabCopyBtn.classList.remove("copied");
-      elements.fabCopyBtn.querySelector(".fab-label").textContent = "複製";
-    }, 1800);
+  // Dock preview → jump to the full result
+  elements.dockPreview.addEventListener("click", () => {
+    elements.outputSection.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  elements.fabCloseBtn.addEventListener("click", () => hideFab());
+  // Dropdown menus (header "⋯ 更多", preset "⋯")
+  bindDropdownMenu(elements.btnHeaderMenu, elements.headerMenu);
+  bindDropdownMenu(elements.btnPresetMenu, elements.presetMenu);
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".menu-wrap") && !e.target.closest(".card-menu-portal") && !e.target.closest(".card-menu-btn")) {
+      closeAllMenus();
+    }
+  });
+
+  bindKeyboardShortcuts();
 
   // Modal cancel/close
   elements.modalCancelBtn.addEventListener("click", () => closeModal(false));
@@ -2923,32 +2936,21 @@ function renderColumnsGrid() {
     titleContainer.appendChild(idxBadge);
     titleContainer.appendChild(titleInput);
     
-    // Pin button (📌)
+    // Lock button (🔒) — sits next to the lock combobox in the footer
     const pinBtn = document.createElement("button");
+    pinBtn.type = "button";
     pinBtn.className = `col-pin-btn ${col.lockedValue ? 'pinned' : ''}`;
-    pinBtn.innerHTML = "📌";
+    pinBtn.textContent = "🔒";
     pinBtn.title = col.lockedValue ? "解鎖此欄位項目" : "鎖定目前生成的項目";
+    pinBtn.setAttribute("aria-label", "鎖定／解鎖此欄位的值");
     pinBtn.addEventListener("click", () => {
       togglePin(col, pinBtn, card);
     });
 
-    // Copy button (📋)
-    const copyColBtn = document.createElement("button");
-    copyColBtn.className = "col-card-action-btn copy";
-    copyColBtn.innerHTML = "📋";
-    copyColBtn.title = "複製此欄位（標題 + 內容）";
-    copyColBtn.addEventListener("click", () => copyColumn(col));
-
-    // Cut button (✂️)
-    const cutColBtn = document.createElement("button");
-    cutColBtn.className = "col-card-action-btn cut";
-    cutColBtn.innerHTML = "✂️";
-    cutColBtn.title = "剪下此欄位（複製內容後清空）";
-    cutColBtn.addEventListener("click", () => cutColumn(col));
-
     // Active/Inactive toggle
     const toggleLabel = document.createElement("label");
     toggleLabel.className = "card-switch";
+    toggleLabel.title = "啟用／停用此欄位（停用的欄位不會被抽選）";
     
     const toggleInput = document.createElement("input");
     toggleInput.type = "checkbox";
@@ -2969,27 +2971,21 @@ function renderColumnsGrid() {
     toggleLabel.appendChild(toggleInput);
     toggleLabel.appendChild(toggleSlider);
     
-    // Remove button (❌)
-    const removeBtn = document.createElement("button");
-    removeBtn.className = "col-card-remove";
-    removeBtn.innerHTML = "&times;";
-    removeBtn.title = "刪除此欄位";
-    removeBtn.addEventListener("click", () => {
-      removeColumn(state.columns.indexOf(col));
+    // "⋯" menu: everything that isn't used on every generation
+    const menuBtn = document.createElement("button");
+    menuBtn.type = "button";
+    menuBtn.className = "card-menu-btn";
+    menuBtn.textContent = "⋯";
+    menuBtn.title = "更多操作：複製、插入、素材庫、刪除…";
+    menuBtn.setAttribute("aria-haspopup", "true");
+    menuBtn.dataset.menuId = String(col.id);
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openCardMenu(menuBtn, buildCardMenuItems());
     });
-    
-    // Controls row: pin + copy + cut + toggle  (remove btn stays absolute)
-    const controlsRow = document.createElement("div");
-    controlsRow.className = "col-card-controls";
 
-    controlsRow.appendChild(pinBtn);
-    controlsRow.appendChild(copyColBtn);
-    controlsRow.appendChild(cutColBtn);
-    controlsRow.appendChild(toggleLabel);
-
+    titleContainer.appendChild(menuBtn);
     header.appendChild(titleContainer);
-    header.appendChild(controlsRow);
-    header.appendChild(removeBtn);   // stays absolute-positioned
 
     // Category + Priority row
     const metaRow = document.createElement("div");
@@ -3053,12 +3049,14 @@ function renderColumnsGrid() {
     priorityWrap.className = "col-priority-wrap";
     priorityWrap.title = "優先權數字越大，在頁籤中排越前面";
 
-    const priorityLabel = document.createElement("span");
+    const priorityLabel = document.createElement("label");
     priorityLabel.className = "col-priority-label";
-    priorityLabel.textContent = "⭐";
+    priorityLabel.textContent = "優先";
+    priorityLabel.htmlFor = `priority-${col.id}`;
 
     const priorityInput = document.createElement("input");
     priorityInput.className = "col-priority-input";
+    priorityInput.id = `priority-${col.id}`;
     priorityInput.type = "number";
     priorityInput.value = col.priority || 0;
     priorityInput.addEventListener("input", (e) => {
@@ -3076,6 +3074,7 @@ function renderColumnsGrid() {
 
     metaRow.appendChild(categoryInput);
     metaRow.appendChild(priorityWrap);
+    metaRow.appendChild(toggleLabel);
     header.appendChild(metaRow);
     
     // Textarea section
@@ -3209,6 +3208,7 @@ function renderColumnsGrid() {
     });
 
     lockWrap.appendChild(lockSelect);
+    lockWrap.appendChild(pinBtn);
     
     textarea.addEventListener("input", (e) => {
       if (isColumnLinked(col)) {
@@ -3245,8 +3245,9 @@ function renderColumnsGrid() {
 
     // No-repeat mode toggle
     const noRepeatBtn = document.createElement("button");
+    noRepeatBtn.type = "button";
     noRepeatBtn.className = `col-no-repeat-btn ${col.noRepeat ? 'active' : ''}`;
-    noRepeatBtn.textContent = "♻️";
+    noRepeatBtn.textContent = "♻️ 不重複";
     noRepeatBtn.title = col.noRepeat
       ? `不重複模式：開啟（已用 ${(col.usedValues || []).length} 個）點擊關閉`
       : "不重複模式：關閉（點擊開啟）";
@@ -3269,26 +3270,6 @@ function renderColumnsGrid() {
 
     footer.appendChild(counter);
 
-    // Paste-after button (shown by CSS body.has-clipboard)
-    const pasteBtn = document.createElement("button");
-    pasteBtn.className = "btn-paste-col";
-    pasteBtn.textContent = "📌 貼入";
-    pasteBtn.title = `在第 ${index + 1} 欄後方貼入複製的欄位`;
-    pasteBtn.addEventListener("click", () => {
-      pasteColumnAfter(state.columns.indexOf(col));
-    });
-    footer.appendChild(pasteBtn);
-
-    // Insert-after button
-    const insertBtn = document.createElement("button");
-    insertBtn.className = "btn-insert-col";
-    insertBtn.textContent = "＋ 插入";
-    insertBtn.title = `在第 ${index + 1} 欄後方插入新欄位`;
-    insertBtn.addEventListener("click", () => {
-      insertColumnAfter(state.columns.indexOf(col));
-    });
-    footer.appendChild(insertBtn);
-
     // Library link controls
     const libraryBtnGroup = document.createElement("div");
     libraryBtnGroup.className = "col-library-btn-group";
@@ -3298,19 +3279,7 @@ function renderColumnsGrid() {
     linkBadge.textContent = "🔗 已連結素材庫";
     linkBadge.title = "此欄位內容來自共用素材庫，編輯內容會同步影響所有使用此素材的欄位";
 
-    const linkBtn = document.createElement("button");
-    linkBtn.type = "button";
-    linkBtn.className = "col-library-btn";
-    linkBtn.textContent = "🔗 連結素材庫";
-    linkBtn.title = "把這個欄位連結到共用素材庫的某一項，內容會即時同步";
-    linkBtn.addEventListener("click", () => openLibraryPicker(col, card));
-
-    const unlinkBtn = document.createElement("button");
-    unlinkBtn.type = "button";
-    unlinkBtn.className = "col-library-btn unlink";
-    unlinkBtn.textContent = "🔓 解除連結";
-    unlinkBtn.title = "解除連結，把目前內容留在這個欄位自己身上（獨立備份，之後不再跟著素材庫變動）";
-    unlinkBtn.addEventListener("click", async () => {
+    const unlinkColumn = async () => {
       const confirmed = await showCustomConfirm(
         "解除連結",
         `確定要把「${col.title || '此欄位'}」解除素材庫連結嗎？\n目前的內容會保留在這個欄位自己身上，但之後素材庫更新就不會再同步過來。`
@@ -3323,14 +3292,9 @@ function renderColumnsGrid() {
       renderAll();
       autoGenerate();
       showToast(`🔓 已解除「${col.title || '此欄位'}」的素材庫連結`, "success");
-    });
+    };
 
-    const promoteBtn = document.createElement("button");
-    promoteBtn.type = "button";
-    promoteBtn.className = "col-library-btn promote";
-    promoteBtn.textContent = "📤 另存為素材庫項目";
-    promoteBtn.title = "把目前這個欄位的內容存成新的素材庫項目，並自動連結它";
-    promoteBtn.addEventListener("click", async () => {
+    const promoteColumnToLibrary = async () => {
       const currentContent = getColumnEffectiveContent(col);
       if (!currentContent.trim()) {
         showToast("這個欄位還沒有內容，無法另存為素材庫項目", "error");
@@ -3347,16 +3311,34 @@ function renderColumnsGrid() {
       saveStateToStorage();
       renderAll();
       showToast(`📤 已另存為素材庫項目「${blockName.trim()}」並自動連結`, "success");
-    });
+    };
 
     if (isColumnLinked(col)) {
       libraryBtnGroup.appendChild(linkBadge);
-      libraryBtnGroup.appendChild(unlinkBtn);
-    } else {
-      libraryBtnGroup.appendChild(linkBtn);
-      libraryBtnGroup.appendChild(promoteBtn);
+      footer.appendChild(libraryBtnGroup);
     }
-    footer.appendChild(libraryBtnGroup);
+
+    // Items for this card's "⋯" menu (built on open so paste reflects the clipboard)
+    const buildCardMenuItems = () => {
+      const items = [
+        { label: "📋 複製此欄位", hint: "標題＋內容，之後可在任一欄後方貼上", onClick: () => copyColumn(col) },
+        { label: "✂️ 剪下此欄位", hint: "複製後清空這一欄", onClick: () => cutColumn(col) }
+      ];
+      if (getClipboard()) {
+        items.push({ label: "📥 在後方貼上欄位", onClick: () => pasteColumnAfter(state.columns.indexOf(col)) });
+      }
+      items.push({ label: "＋ 在後方插入新欄位", onClick: () => insertColumnAfter(state.columns.indexOf(col)) });
+      items.push({ divider: "素材庫" });
+      if (isColumnLinked(col)) {
+        items.push({ label: "🔓 解除素材庫連結", hint: "內容留在這一欄，不再同步", onClick: unlinkColumn });
+      } else {
+        items.push({ label: "🔗 連結素材庫…", hint: "內容改用素材庫項目，會即時同步", onClick: () => openLibraryPicker(col, card) });
+        items.push({ label: "📤 另存為素材庫項目", hint: "把這一欄存成可共用的素材", onClick: promoteColumnToLibrary });
+      }
+      items.push({ divider: "" });
+      items.push({ label: "🗑️ 刪除此欄位", danger: true, onClick: () => removeColumn(state.columns.indexOf(col)) });
+      return items;
+    };
 
     card.appendChild(header);
     card.appendChild(textWrapper);
@@ -4302,7 +4284,7 @@ function generatePrompt(shouldAnimate = true) {
 
     const titleSpan = document.createElement("span");
     titleSpan.className = "output-card-title";
-    titleSpan.textContent = genCount > 1 ? `第 ${index + 1} 組提示詞` : "生成的提示詞結果";
+    titleSpan.textContent = genCount > 1 ? `第 ${index + 1} 組提示詞` : "本次結果";
 
     const copyBtn = document.createElement("button");
     copyBtn.className = "btn-copy-single";
@@ -4340,49 +4322,194 @@ function generatePrompt(shouldAnimate = true) {
     showToast(toastMsg, "info");
   }
 
-  // Update floating quick-copy FAB
+  // Update the bottom dock preview
   if (generatedPrompts.length > 0) {
-    showFab(generatedPrompts[0]);
+    updateDockPreview(generatedPrompts[0], generatedPrompts.length);
   }
 }
 
 // ---------------------------------
-// Floating Quick-Copy FAB
+// Bottom Action Dock
 // ---------------------------------
 
-let fabHideTimer = null;
-
-function showFab(promptText) {
-  const fab = elements.fabQuickCopy;
-  if (!fab) return;
-
-  // Store the full text for copy
-  fab.dataset.fullText = promptText;
-
-  // Set preview (first ~50 chars)
-  const preview = promptText.replace(/\n/g, ", ").slice(0, 55);
-  elements.fabPreviewText.textContent = preview + (promptText.length > 55 ? "…" : "");
-
-  // Reset copy button label
-  elements.fabCopyBtn.classList.remove("copied");
-  elements.fabCopyBtn.querySelector(".fab-label").textContent = "複製";
-
-  // Show with animation
-  fab.classList.remove("hiding");
-  fab.style.display = "flex";
-
-  // Clear any pending hide timer
-  if (fabHideTimer) clearTimeout(fabHideTimer);
+function updateDockPreview(promptText, total) {
+  const preview = promptText.replace(/\n/g, ", ");
+  elements.dockPreviewText.textContent = total > 1 ? `（共 ${total} 組）${preview}` : preview;
+  elements.dockPreview.classList.add("has-result");
 }
 
-function hideFab() {
-  const fab = elements.fabQuickCopy;
-  if (!fab || fab.style.display === "none") return;
-  fab.classList.add("hiding");
-  fabHideTimer = setTimeout(() => {
-    fab.style.display = "none";
-    fab.classList.remove("hiding");
-  }, 260);
+// ---------------------------------
+// Dropdown Menus
+// ---------------------------------
+
+function closeAllMenus(except) {
+  if (elements.cardMenuPortal && elements.cardMenuPortal !== except) {
+    elements.cardMenuPortal.classList.remove("open");
+  }
+  document.querySelectorAll(".menu-panel.open").forEach(panel => {
+    if (panel === except) return;
+    panel.classList.remove("open");
+    const trigger = panel.previousElementSibling;
+    if (trigger && trigger.classList.contains("menu-trigger")) {
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
+function bindDropdownMenu(trigger, panel) {
+  if (!trigger || !panel) return;
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const willOpen = !panel.classList.contains("open");
+    closeAllMenus();
+    panel.classList.toggle("open", willOpen);
+    trigger.setAttribute("aria-expanded", String(willOpen));
+  });
+  // Picking an item closes the menu; the item's own click handler still runs
+  panel.addEventListener("click", (e) => {
+    if (e.target.closest(".menu-item")) closeAllMenus();
+  });
+}
+
+// Per-column "⋯" menu, rendered into one shared portal so cards don't clip it
+function openCardMenu(anchorBtn, items) {
+  const portal = elements.cardMenuPortal;
+  if (portal.classList.contains("open") && portal.dataset.anchorId === anchorBtn.dataset.menuId) {
+    closeAllMenus();
+    return;
+  }
+  closeAllMenus();
+  closeLockPortal();
+  portal.innerHTML = "";
+  portal.dataset.anchorId = anchorBtn.dataset.menuId;
+
+  items.forEach(item => {
+    if ("divider" in item) {
+      const div = document.createElement("div");
+      div.className = "menu-divider";
+      div.textContent = item.divider;
+      portal.appendChild(div);
+      return;
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "menu-item" + (item.danger ? " danger" : "");
+    btn.setAttribute("role", "menuitem");
+    btn.textContent = item.label;
+    if (item.hint) {
+      const small = document.createElement("small");
+      small.textContent = item.hint;
+      btn.appendChild(small);
+    }
+    btn.addEventListener("click", () => {
+      closeAllMenus();
+      item.onClick();
+    });
+    portal.appendChild(btn);
+  });
+
+  portal.classList.add("open");
+  cardMenuAnchor = anchorBtn;
+  positionCardMenu();
+}
+
+let cardMenuAnchor = null;
+
+function positionCardMenu() {
+  const portal = elements.cardMenuPortal;
+  if (!cardMenuAnchor || !portal.classList.contains("open")) return;
+  const rect = cardMenuAnchor.getBoundingClientRect();
+  // Anchor scrolled out of view (or removed by a re-render) → close
+  if (!cardMenuAnchor.isConnected || rect.bottom < 0 || rect.top > window.innerHeight) {
+    closeAllMenus();
+    return;
+  }
+  const width = portal.offsetWidth;
+  const height = portal.offsetHeight;
+  const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+  const below = rect.bottom + 6;
+  const top = below + height > window.innerHeight - 8 ? Math.max(8, rect.top - height - 6) : below;
+  portal.style.left = `${left}px`;
+  portal.style.top = `${top}px`;
+}
+
+// Keep the card menu attached to its button while the page scrolls
+window.addEventListener("scroll", positionCardMenu, { passive: true, capture: true });
+window.addEventListener("resize", positionCardMenu);
+
+// ---------------------------------
+// Keyboard Shortcuts
+// ---------------------------------
+
+function bindKeyboardShortcuts() {
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const mod = isMac ? "⌘" : "Ctrl";
+  elements.btnGenerate.title = `隨機生成（${mod}+Enter）`;
+  elements.btnCopyText.title = `複製全部提示詞（${mod}+Shift+Enter）`;
+  if (elements.dockShortcutHint) {
+    elements.dockShortcutHint.innerHTML =
+      `快捷鍵：<kbd>${mod}</kbd>+<kbd>Enter</kbd> 生成 · <kbd>${mod}</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> 複製`;
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeAllMenus();
+      return;
+    }
+    if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return;
+    // Don't fire from inside / while a dialog is open (Enter there means "confirm")
+    if (e.target.closest && e.target.closest(".modal-overlay")) return;
+    if (document.querySelector(".modal-overlay.active")) return;
+    e.preventDefault();
+    if (e.shiftKey) {
+      copyPromptText();
+    } else {
+      generatePrompt();
+    }
+  });
+}
+
+// ---------------------------------
+// Backup Status & Reminder
+// ---------------------------------
+
+const LAST_BACKUP_KEY = `${STORAGE_PREFIX}last_backup_at`;
+const BACKUP_NAG_KEY = `${STORAGE_PREFIX}backup_nag_date`;
+const BACKUP_STALE_DAYS = 14;
+
+function getDaysSinceBackup() {
+  const last = localStorage.getItem(LAST_BACKUP_KEY);
+  if (!last) return null;
+  const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+  return isNaN(days) ? null : days;
+}
+
+function renderBackupStatus() {
+  const el = elements.backupStatus;
+  if (!el) return;
+  const days = getDaysSinceBackup();
+  let text;
+  if (days === null) text = "尚未備份過";
+  else if (days === 0) text = "上次完整備份：今天";
+  else text = `上次完整備份：${days} 天前`;
+  el.textContent = text;
+  el.classList.toggle("stale", days === null || days >= BACKUP_STALE_DAYS);
+}
+
+function maybeRemindBackup() {
+  const hasData = Object.keys(getPresetsFromStorage()).length > 0 || Object.keys(library).length > 0;
+  if (!hasData) return;
+  const days = getDaysSinceBackup();
+  if (days !== null && days < BACKUP_STALE_DAYS) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem(BACKUP_NAG_KEY) === today) return; // at most once a day
+  localStorage.setItem(BACKUP_NAG_KEY, today);
+  showToast(
+    days === null
+      ? "💾 你還沒備份過資料，建議到頁面最下方「備份與還原」下載完整備份"
+      : `💾 已經 ${days} 天沒備份了，建議到頁面最下方下載完整備份`,
+    "info"
+  );
 }
 
 // ---------------------------------
@@ -4898,14 +5025,29 @@ function importPresetsFromFile(event) {
       const currentPresets = getPresetsFromStorage();
       
       if (isPresetsPack) {
-        // Step 2: Merge or overwrite confirmation
-        const mergeChoice = await showCustomConfirm(
-          "合併或覆寫",
-          "您要與現有的設定檔「合併」嗎？（點選「取消」則會完全「覆寫」清空現有設定檔）",
-          false
-        );
-        
-        let finalPresets = mergeChoice ? { ...currentPresets } : {};
+        // Step 2: Merge (default) or overwrite. Closing/cancelling must never wipe data,
+        // so overwrite needs its own explicit, danger-styled confirmation.
+        let finalPresets = { ...currentPresets };
+        const existingCount = Object.keys(currentPresets).length;
+        if (existingCount > 0) {
+          const mergeChoice = await showCustomConfirm(
+            "合併到現有設定檔？",
+            `建議選「確認」：匯入的設定檔會加進你現有的 ${existingCount} 個設定檔裡（同名的會被取代）。\n選「取消」則會詢問是否改成覆寫。`,
+            false
+          );
+          if (!mergeChoice) {
+            const overwrite = await showCustomConfirm(
+              "改成覆寫？",
+              `確定要刪除現有的 ${existingCount} 個設定檔，只保留這次匯入的內容嗎？此操作無法還原。\n選「取消」則中止匯入，什麼都不會改變。`,
+              true
+            );
+            if (!overwrite) {
+              showToast("已取消匯入，現有設定檔沒有變動", "info");
+              return;
+            }
+            finalPresets = {};
+          }
+        }
         
         // Ask for a prefix to avoid collisions
         const prefix = await showCustomPrompt(
@@ -4968,7 +5110,13 @@ function showToast(message, type = "info") {
   if (type === "error") icon = "❌";
   if (type === "info") icon = "ℹ️";
   
-  toast.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-text">${message}</span>`;
+  const iconEl = document.createElement("span");
+  iconEl.className = "toast-icon";
+  iconEl.textContent = icon;
+  const textEl = document.createElement("span");
+  textEl.className = "toast-text";
+  textEl.textContent = message;
+  toast.append(iconEl, textEl);
   container.appendChild(toast);
   
   // Trigger slide in
@@ -5133,7 +5281,9 @@ function exportPortablePack() {
     libraryCount > 0 ? `${libraryCount} 個素材庫項目` : null
   ].filter(Boolean).join("、");
   
-  showToast(`📦 便攜包已匯出（包含：${summary}）`, "success");
+  localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+  renderBackupStatus();
+  showToast(`📦 完整備份已下載（包含：${summary}）`, "success");
 }
 
 /**
