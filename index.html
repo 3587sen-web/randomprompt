@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260815">
+  <link rel="stylesheet" href="style.css?v=20260924">
 </head>
 <body>
 
@@ -39,12 +39,16 @@
         </div>
 
         
-        <!-- Quick Actions -->
-        <div class="action-buttons">
-          <button class="btn btn-primary"   id="btnPrefill"       title="填入預置常用提示詞">填入預設</button>
-          <button class="btn btn-secondary" id="btnResetDefault"  title="清除所有欄位並重設為 5 個空白欄位">⬜ 預設</button>
-          <button class="btn btn-danger"    id="btnEmptyContent"  title="清空所有欄位內容">清空內容</button>
-          <button class="btn btn-danger"    id="btnClearTitles"   title="清空所有欄位標題">清空標題</button>
+        <!-- Rarely used / destructive actions live in a menu -->
+        <div class="menu-wrap">
+          <button type="button" class="btn btn-secondary menu-trigger" id="btnHeaderMenu" aria-haspopup="true" aria-expanded="false" title="範例、重設與清空">⋯ 更多</button>
+          <div class="menu-panel" id="headerMenu" role="menu">
+            <button type="button" class="menu-item" id="btnPrefill" role="menuitem">📋 載入範例<small>覆寫目前內容，填入 12 欄範例提示詞</small></button>
+            <button type="button" class="menu-item" id="btnResetDefault" role="menuitem">⬜ 清空重來<small>刪除所有欄位，重設為 5 個空白欄位</small></button>
+            <div class="menu-divider">清除（無法復原）</div>
+            <button type="button" class="menu-item danger" id="btnEmptyContent" role="menuitem">🧹 清空所有欄位內容</button>
+            <button type="button" class="menu-item danger" id="btnClearTitles" role="menuitem">🏷️ 清空所有欄位標題</button>
+          </div>
         </div>
       </div>
     </header>
@@ -80,28 +84,36 @@
               </select>
             </div>
             <div class="preset-actions">
-              <button class="btn btn-preset load"   id="btnLoadPreset"          title="載入選取的設定檔">📂 載入</button>
-              <button class="btn btn-preset save"   id="btnSavePreset"          title="儲存當前內容至設定檔">💾 儲存</button>
-              <button class="btn btn-preset delete btn-danger" id="btnDeletePreset" title="刪除選取的設定檔">🗑️ 刪除</button>
-              <button class="btn btn-preset export" id="btnDuplicatePreset"     title="複製目前選取的設定檔">📑 複製</button>
-              <button class="btn btn-preset export" id="btnExportPresets"       title="匯出所有設定檔至 JSON 檔案">⬇️ 匯出全部</button>
-              <button class="btn btn-preset export" id="btnExportSinglePreset"  title="匯出目前選取的單一設定檔">📤 匯出此檔</button>
-              <button class="btn btn-preset import" id="btnImportPresetsTrigger" title="從 JSON 檔案匯入設定檔">⬆️ 匯入</button>
+              <button class="btn btn-preset load" id="btnLoadPreset" title="載入選取的設定檔（會覆寫目前內容）">📂 載入</button>
+              <button class="btn btn-preset save" id="btnSavePreset" title="把目前的欄位內容存成設定檔">💾 儲存</button>
+              <div class="menu-wrap">
+                <button type="button" class="btn btn-preset menu-trigger" id="btnPresetMenu" aria-haspopup="true" aria-expanded="false" title="複製、匯出、刪除選取的設定檔">⋯</button>
+                <div class="menu-panel align-right" id="presetMenu" role="menu">
+                  <div class="menu-divider">對選取的設定檔</div>
+                  <button type="button" class="menu-item" id="btnDuplicatePreset" role="menuitem">📑 複製一份</button>
+                  <button type="button" class="menu-item" id="btnExportSinglePreset" role="menuitem">📤 匯出成檔案<small>適合分享給別人</small></button>
+                  <button type="button" class="menu-item danger" id="btnDeletePreset" role="menuitem">🗑️ 刪除</button>
+                </div>
+              </div>
             </div>
-            <input type="file" id="importFileInput" accept=".json" style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
           </div>
         </div>
       </div>
 
-      <!-- Portable Pack Section -->
-      <div class="portable-section">
-        <h3>便攜包 <span class="portable-badge">跨裝置同步</span></h3>
-        <p class="portable-desc">將所有欄位資料、設定檔、固定標籤一鍵打包下載，可在另一台電腦上完整還原。</p>
-        <div class="portable-actions">
-          <button class="btn-portable" id="btnExportPortable" title="匯出所有資料為便攜包">📦 匯出便攜包</button>
-          <button class="btn-portable restore" id="btnImportPortableTrigger" title="從便攜包還原所有資料">📥 還原便攜包</button>
+    </section>
+
+    <!-- Output Area (buttons live in the bottom action dock) -->
+    <section class="output-section glass" id="outputSection">
+      <div class="output-header">
+        <h2>生成的提示詞結果</h2>
+        <span class="output-hint">用畫面底部的「🔮 隨機生成」產生新結果</span>
+      </div>
+      <div class="outputs-grid" id="outputsGrid">
+        <div class="output-card">
+          <div class="output-box-container">
+            <div class="output-box" id="outputBox">在下方欄位輸入內容 → 點選畫面底部的「🔮 隨機生成」，就會從每個啟用欄位隨機抽一行，組合出你的 Prompt！</div>
+          </div>
         </div>
-        <input type="file" id="portableFileInput" accept=".json" style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
       </div>
     </section>
 
@@ -110,8 +122,8 @@
       <div class="section-header">
         <h2>提示詞欄位區</h2>
         <div class="section-header-right">
-          <button type="button" class="btn-hdr-toggle" id="btnToggleAllActive" title="一鍵啟用/停用所有欄位">⚡ 全作用</button>
-          <button type="button" class="btn-hdr-toggle" id="btnToggleAllNoRepeat" title="一鍵開啟/關閉所有欄位不重複模式">♻️ 全不重複</button>
+          <button type="button" class="btn-hdr-toggle" id="btnToggleAllActive" title="一鍵啟用/停用所有欄位">⚡ 全部啟用</button>
+          <button type="button" class="btn-hdr-toggle" id="btnToggleAllNoRepeat" title="一鍵開啟/關閉所有欄位不重複模式">♻️ 全部不重複</button>
           <select id="colJumpSelect" class="col-jump-select">
             <option value="">🔍 跳轉至欄位...</option>
           </select>
@@ -124,10 +136,12 @@
         <div class="category-tabs-bar" id="categoryTabsBar">
           <!-- Rendered dynamically by app.js -->
         </div>
+        <div class="tool-group" aria-label="分類與素材庫工具">
         <button type="button" class="btn-hdr-toggle" id="btnCategoryDefaults" title="查看/調整每個分類的預設優先權，之後新增欄位會套用">⚙️ 分類優先權</button>
         <button type="button" class="btn-hdr-toggle" id="btnLibraryManager" title="瀏覽/改名/編輯/刪除共用素材庫項目">🔗 素材庫</button>
         <button type="button" class="btn-hdr-toggle" id="btnAutoLinkByTitle" title="掃描目前所有欄位，標題跟素材庫項目完全相同的自動一次連結，不用一個個手動連">🪄 自動比對連結</button>
         <button type="button" class="btn-hdr-toggle" id="btnBatchAddFromLibrary" title="從素材庫勾選多個項目，一次新增對應數量的欄位並自動連結">📦 批次加入主題</button>
+        </div>
       </div>
 
       <!-- Category Default Priority management panel -->
@@ -231,32 +245,32 @@
       </div>
     </section>
 
-    <!-- Output and Action Area -->
-    <section class="output-section glass">
-      <div class="output-header">
-        <h2>生成的提示詞結果</h2>
-        <div class="output-actions">
-          <!-- Generate Count Controller -->
-          <div class="ctrl-group">
-            <label for="genCountInput">生成數量</label>
-            <div class="number-stepper">
-              <button type="button" class="step-btn" id="decGenCount">-</button>
-              <input type="number" id="genCountInput" min="1" max="99" value="1">
-              <button type="button" class="step-btn" id="incGenCount">+</button>
-            </div>
-          </div>
-          <button class="btn btn-primary btn-lg" id="btnGenerate">🔮 隨機生成</button>
-          <button class="btn btn-secondary btn-lg" id="btnCopyText" title="複製全部提示詞">📋 複製全部</button>
-          <button class="btn btn-secondary btn-lg" id="btnCopyJson" title="複製 JSON 格式">🧩 複製 JSON</button>
-        </div>
+
+    <!-- Backup & Restore -->
+    <section class="backup-section glass" id="backupSection">
+      <div class="backup-header">
+        <h2>💾 備份與還原</h2>
+        <span class="backup-status" id="backupStatus">尚未備份過</span>
       </div>
-      <div class="outputs-grid" id="outputsGrid">
-        <div class="output-card">
-          <div class="output-box-container">
-            <div class="output-box" id="outputBox">
-              在上方欄位輸入內容 → 點選「隨機生成」 → 從每個啟用欄位中隨機抽選一行組合出您的完美 Prompt！
-            </div>
+      <p class="backup-warning">⚠️ 所有資料只存在<strong>這台裝置的這個瀏覽器</strong>裡。清除瀏覽器資料、換電腦或換瀏覽器都會看不到，建議定期備份。</p>
+      <div class="backup-grid">
+        <div class="backup-card primary">
+          <h3>完整備份 <span class="portable-badge">建議</span></h3>
+          <p>一次打包<strong>所有東西</strong>：目前的欄位、全部設定檔、固定標籤、素材庫。換電腦時用這個。</p>
+          <div class="portable-actions">
+            <button class="btn-portable" id="btnExportPortable" title="下載包含所有資料的備份檔">📦 下載完整備份</button>
+            <button class="btn-portable restore" id="btnImportPortableTrigger" title="用備份檔還原所有資料">📥 從備份還原</button>
           </div>
+          <input type="file" id="portableFileInput" accept=".json" style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
+        </div>
+        <div class="backup-card">
+          <h3>只有設定檔</h3>
+          <p>只匯出／匯入「設定檔清單」，不含目前編輯中的內容和素材庫。適合把設定檔分享給別人。</p>
+          <div class="portable-actions">
+            <button class="btn btn-secondary" id="btnExportPresets" title="把所有設定檔匯出成一個 JSON 檔">⬇️ 匯出所有設定檔</button>
+            <button class="btn btn-secondary" id="btnImportPresetsTrigger" title="從 JSON 檔加入設定檔">⬆️ 匯入設定檔</button>
+          </div>
+          <input type="file" id="importFileInput" accept=".json" style="opacity: 0; position: absolute; pointer-events: none; width: 1px; height: 1px;">
         </div>
       </div>
     </section>
@@ -283,16 +297,33 @@
   <!-- Toast System Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- Floating Quick-Copy FAB (appears after generation) -->
-  <div id="fabQuickCopy" class="fab-quick-copy" style="display:none;">
-    <div class="fab-preview" id="fabPreviewText"></div>
-    <button class="fab-copy-btn" id="fabCopyBtn" title="複製生成的提示詞">
-      <span class="fab-icon">📋</span>
-      <span class="fab-label">複製</span>
-    </button>
-    <button class="fab-close-btn" id="fabCloseBtn" title="關閉">×</button>
+  <!-- Bottom Action Dock: generate & copy are always one tap away -->
+  <div class="action-dock" id="actionDock">
+    <div class="action-dock-inner">
+      <button type="button" class="dock-preview" id="dockPreview" title="捲動到完整結果">
+        <span class="dock-preview-label">最新結果</span>
+        <span class="dock-preview-text" id="dockPreviewText">尚未生成，按右邊的「🔮 隨機生成」開始</span>
+      </button>
+      <div class="dock-actions">
+        <div class="ctrl-group dock-count">
+          <label for="genCountInput">組數</label>
+          <div class="number-stepper">
+            <button type="button" class="step-btn" id="decGenCount" aria-label="減少組數">-</button>
+            <input type="number" id="genCountInput" min="1" max="99" value="1">
+            <button type="button" class="step-btn" id="incGenCount" aria-label="增加組數">+</button>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btnGenerate" title="隨機生成（Ctrl+Enter）">🔮 隨機生成</button>
+        <button class="btn btn-secondary btn-lg" id="btnCopyText" title="複製全部提示詞（Ctrl+Shift+Enter）" aria-label="複製全部提示詞">📋<span class="btn-label"> 複製</span></button>
+        <button class="btn btn-secondary btn-lg" id="btnCopyJson" title="複製 JSON 格式" aria-label="複製 JSON 格式">🧩<span class="btn-label"> JSON</span></button>
+      </div>
+    </div>
+    <div class="dock-shortcut-hint" id="dockShortcutHint">快捷鍵：<kbd>Ctrl</kbd>+<kbd>Enter</kbd> 生成 · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> 複製</div>
   </div>
 
-  <script src="app.js?v=20260815"></script>
+  <!-- Shared popover for per-column "⋯" menus -->
+  <div class="menu-panel card-menu-portal" id="cardMenuPortal" role="menu"></div>
+
+  <script src="app.js?v=20260924"></script>
 </body>
 </html>
