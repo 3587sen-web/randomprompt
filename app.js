@@ -1495,7 +1495,7 @@ async function confirmLibraryBatchAdd() {
       active: true,
       lockedValue: null,
       category: block.category || "",
-      priority: getDefaultPriorityForCategory(block.category),
+      priority: 0,
       linkedBlockId: block.id
     });
   });
@@ -2042,33 +2042,80 @@ function getCategoryDropdownOptions() {
 
 // Columns to display for the active tab, sorted by priority (highest first)
 function getVisibleSortedColumns() {
-  const filtered = activeCategoryTab === "__all__"
+  // Card order on screen == order in state.columns == order in the prompt.
+  return activeCategoryTab === "__all__"
     ? state.columns.slice()
     : state.columns.filter(c => (c.category || "") === activeCategoryTab);
-
-  return filtered
-    .map((col, i) => ({ col, i }))
-    .sort((a, b) => (b.col.priority || 0) - (a.col.priority || 0) || a.i - b.i)
-    .map(x => x.col);
 }
 
-// ALL columns sorted by priority (highest first), ignoring which tab is
-// currently open. Used for prompt generation so the output order always
-// matches the priority order, no matter which category tab you're viewing.
-function getAllColumnsSortedByPriority() {
-  return state.columns
+// Older versions ordered cards by a hidden per-column "priority" number.
+// Convert that once into plain array order (keeping what the user saw),
+// then zero it out so it never reorders anything again. Safe to call often.
+function normalizeColumnOrder() {
+  if (!state.columns.some(c => (c.priority || 0) !== 0)) return false;
+  state.columns = state.columns
     .map((col, i) => ({ col, i }))
     .sort((a, b) => (b.col.priority || 0) - (a.col.priority || 0) || a.i - b.i)
-    .map(x => x.col);
+    .map(x => { x.col.priority = 0; return x.col; });
+  state.columnCount = state.columns.length;
+  return true;
 }
 
-// Reassign priority values so that `orderedCols` (top-to-bottom) sorts back
-// into that same order next render. Only touches columns in the current view.
-function reassignPriorityFromOrder(orderedCols) {
-  const n = orderedCols.length;
-  orderedCols.forEach((col, i) => {
-    col.priority = n - i;
-  });
+// Write a reordered view back into state.columns. In a category tab only
+// those columns swap places among the slots they already occupy; every
+// other column stays exactly where it was.
+function applyViewOrder(orderedViewCols) {
+  const viewIds = new Set(orderedViewCols.map(c => c.id));
+  let k = 0;
+  state.columns = state.columns.map(c => (viewIds.has(c.id) ? orderedViewCols[k++] : c));
+}
+
+// Move one column within the current view: "first" | "last" | -1 | +1
+function moveColumnInView(col, where) {
+  const view = getVisibleSortedColumns();
+  const from = view.indexOf(col);
+  if (from === -1) return;
+  let to;
+  if (where === "first") to = 0;
+  else if (where === "last") to = view.length - 1;
+  else to = Math.max(0, Math.min(view.length - 1, from + where));
+  if (to === from) return;
+  view.splice(from, 1);
+  view.splice(to, 0, col);
+  applyViewOrder(view);
+  saveStateToStorage();
+  renderAll();
+  autoGenerate();
+  flashColumnCard(col.id);
+  const label = col.title.trim() || "此欄位";
+  showToast(to === 0 ? `⏫ 「${label}」已移到最前面` : `「${label}」已移到第 ${to + 1} 位`, "success");
+}
+
+function flashColumnCard(colId) {
+  const cardEl = elements.columnsGrid.querySelector(`[data-id="${colId}"]`);
+  if (!cardEl) return;
+  cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  cardEl.classList.add("highlight-flash");
+  setTimeout(() => cardEl.classList.remove("highlight-flash"), 1500);
+}
+
+// One-off: sort columns by each category's weight (from the 分類排序 panel).
+// Uncategorized columns keep weight 0; ties keep their current order.
+async function sortColumnsByCategoryWeight() {
+  const confirmed = await showCustomConfirm(
+    "依分類重新排序",
+    "會依照上面每個分類的數字（大的排前面）重新排列所有欄位，並直接影響生成順序。\n沒有分類的欄位排在最後，同分類的欄位維持原本的先後。確定要排序嗎？"
+  );
+  if (!confirmed) return false;
+  state.columns = state.columns
+    .map((col, i) => ({ col, i, w: col.category ? getDefaultPriorityForCategory(col.category) : -Infinity }))
+    .sort((a, b) => b.w - a.w || a.i - b.i)
+    .map(x => x.col);
+  saveStateToStorage();
+  renderAll();
+  autoGenerate();
+  showToast("已依分類重新排序", "success");
+  return true;
 }
 
 // Compute the final order after dropping the dragged group next to dropTarget,
@@ -2102,13 +2149,109 @@ function finalizeGroupDrop() {
   const insertIdx = dropTarget.position === "before" ? targetIdx : targetIdx + 1;
 
   remaining.splice(insertIdx, 0, ...groupCols);
-  reassignPriorityFromOrder(remaining);
+  applyViewOrder(remaining);
 
   saveStateToStorage();
   dragGroupIds = null;
   dropTarget = null;
   renderAll();
   autoGenerate();
+}
+
+function isDropBefore(cardEl, x, y) {
+  const gridCols = getComputedStyle(elements.columnsGrid).gridTemplateColumns.split(" ").filter(Boolean).length;
+  const r = cardEl.getBoundingClientRect();
+  return gridCols <= 1 ? y < r.top + r.height / 2 : x < r.left + r.width / 2;
+}
+
+function clearDropIndicators() {
+  elements.columnsGrid.querySelectorAll(".drop-indicator-before, .drop-indicator-after")
+    .forEach(el => el.classList.remove("drop-indicator-before", "drop-indicator-after"));
+}
+
+// Touch/pen drag for column cards: press the ⠿ handle and move.
+// Mirrors the native drag & drop path (same dragGroupIds / dropTarget / finalizeGroupDrop).
+function startPointerDrag(e, col, handle) {
+  e.preventDefault();
+  const ids = (selectedColumnIds.has(col.id) && selectedColumnIds.size > 1)
+    ? Array.from(selectedColumnIds)
+    : [col.id];
+  dragGroupIds = ids;
+  dropTarget = null;
+  ids.forEach(id => {
+    const el = elements.columnsGrid.querySelector(`[data-id="${id}"]`);
+    if (el) el.classList.add("dragging");
+  });
+
+  const ghost = document.createElement("div");
+  ghost.className = "touch-drag-ghost";
+  ghost.textContent = ids.length > 1 ? `移動 ${ids.length} 個欄位` : `⠿ ${col.title.trim() || "此欄位"}`;
+  document.body.appendChild(ghost);
+
+  let lastX = e.clientX;
+  let lastY = e.clientY;
+  let scrollSpeed = 0;
+  let rafId = null;
+
+  const updateTarget = () => {
+    ghost.style.transform = `translate(${lastX + 12}px, ${lastY - 28}px)`;
+    const under = document.elementFromPoint(lastX, lastY);
+    const cardEl = under && under.closest("#columnsGrid .col-card");
+    clearDropIndicators();
+    dropTarget = null;
+    if (!cardEl) return;
+    const targetId = Number(cardEl.dataset.id);
+    if (ids.includes(targetId)) return;
+    const before = isDropBefore(cardEl, lastX, lastY);
+    dropTarget = { colId: targetId, position: before ? "before" : "after" };
+    cardEl.classList.add(before ? "drop-indicator-before" : "drop-indicator-after");
+  };
+
+  // Auto-scroll near the top / bottom (above the action dock)
+  const dock = document.getElementById("actionDock");
+  const dockTop = dock ? dock.getBoundingClientRect().top : window.innerHeight;
+  const tick = () => {
+    if (scrollSpeed !== 0) {
+      window.scrollBy(0, scrollSpeed);
+      updateTarget();
+    }
+    rafId = requestAnimationFrame(tick);
+  };
+
+  const onMove = (ev) => {
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+    const edge = 70;
+    if (lastY < edge) scrollSpeed = -Math.ceil((edge - lastY) / 5);
+    else if (lastY > dockTop - edge) scrollSpeed = Math.ceil((lastY - (dockTop - edge)) / 5);
+    else scrollSpeed = 0;
+    updateTarget();
+  };
+
+  const finish = (commit) => {
+    cancelAnimationFrame(rafId);
+    handle.removeEventListener("pointermove", onMove);
+    handle.removeEventListener("pointerup", onUp);
+    handle.removeEventListener("pointercancel", onCancel);
+    ghost.remove();
+    elements.columnsGrid.querySelectorAll(".dragging").forEach(el => el.classList.remove("dragging"));
+    clearDropIndicators();
+    if (commit && dropTarget) {
+      finalizeGroupDrop();
+    } else {
+      dragGroupIds = null;
+      dropTarget = null;
+    }
+  };
+  const onUp = () => finish(true);
+  const onCancel = () => finish(false);
+
+  try { handle.setPointerCapture(e.pointerId); } catch (_) { /* element may be detached */ }
+  handle.addEventListener("pointermove", onMove);
+  handle.addEventListener("pointerup", onUp);
+  handle.addEventListener("pointercancel", onCancel);
+  updateTarget();
+  rafId = requestAnimationFrame(tick);
 }
 
 // Update the "N selected" badge + clear-selection button visibility
@@ -2307,6 +2450,12 @@ function bindGlobalEvents() {
   if (elements.btnAddPresetCategory) {
     elements.btnAddPresetCategory.addEventListener("click", addNewPresetCategory);
   }
+  const btnSortByCategory = document.getElementById("btnSortByCategory");
+  if (btnSortByCategory) {
+    btnSortByCategory.addEventListener("click", async () => {
+      if (await sortColumnsByCategoryWeight()) closeCategoryDefaultsModal();
+    });
+  }
   if (elements.categoryDefaultsModal) {
     elements.categoryDefaultsModal.addEventListener("click", (e) => {
       if (e.target === elements.categoryDefaultsModal) closeCategoryDefaultsModal();
@@ -2483,6 +2632,7 @@ function bindGlobalEvents() {
 
 function renderAll() {
   state.columns.forEach(ensureColumnDefaults);
+  if (normalizeColumnOrder()) saveStateToStorage();
   renderCategoryTabs();
   renderColumnTitleDatalist();
   renderColumnsGrid();
@@ -2815,8 +2965,7 @@ function renderColumnsGrid() {
       elements.columnsGrid.querySelectorAll(".drop-indicator-before, .drop-indicator-after")
         .forEach(el => el.classList.remove("drop-indicator-before", "drop-indicator-after"));
       
-      const rect = card.getBoundingClientRect();
-      const isBefore = (e.clientX - rect.left) < rect.width / 2;
+      const isBefore = isDropBefore(card, e.clientX, e.clientY);
       dropTarget = { colId: col.id, position: isBefore ? "before" : "after" };
       card.classList.add(isBefore ? "drop-indicator-before" : "drop-indicator-after");
     });
@@ -2872,17 +3021,21 @@ function renderColumnsGrid() {
     dragHandle.addEventListener("mouseup", () => {
       card.setAttribute("draggable", "false");
     });
+    dragHandle.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse") return; // mouse uses native drag & drop
+      startPointerDrag(e, col, dragHandle);
+    });
     
     const idxBadge = document.createElement("div");
     idxBadge.className = "col-idx-badge";
     idxBadge.textContent = index + 1;
-    idxBadge.title = `點擊輸入目標順位快速移動（目前第 ${index + 1} 位，依優先權排序）`;
+    idxBadge.title = `第 ${index + 1} 位（生成時也排第 ${index + 1}）。點一下輸入要移到第幾位`;
     idxBadge.addEventListener("click", async () => {
       const total = visibleColumns.length;
       const currentPos = visibleColumns.indexOf(col) + 1;
       const newPosStr = await showCustomPrompt(
         "調整顯示順位",
-        `目前順位：第 ${currentPos} 位「${col.title || '未命名'}」\n請輸入目標順位（1–${total}），數字越前面代表優先權越高：`,
+        `目前順位：第 ${currentPos} 位「${col.title || '未命名'}」\n請輸入要移到第幾位（1–${total}）。排越前面，生成時越早出現：`,
         String(currentPos)
       );
       if (newPosStr === null || newPosStr.trim() === "") return;
@@ -2894,7 +3047,7 @@ function renderColumnsGrid() {
       const reordered = visibleColumns.slice();
       const [moved] = reordered.splice(currentPos - 1, 1);
       reordered.splice(newPos - 1, 0, moved);
-      reassignPriorityFromOrder(reordered);
+      applyViewOrder(reordered);
       saveStateToStorage();
       renderAll();
       autoGenerate();
@@ -3034,46 +3187,12 @@ function renderColumnsGrid() {
         col.category = val;
       }
 
-      // If priority was never manually touched (still at the untouched
-      // default of 0), auto-fill it based on the newly chosen category.
-      // Manually-set priorities (including a deliberate 0) are left alone.
-      if (col.priority === 0 && col.category) {
-        col.priority = getDefaultPriorityForCategory(col.category);
-      }
       saveStateToStorage();
       renderAll();
       autoGenerate();
     });
-
-    const priorityWrap = document.createElement("div");
-    priorityWrap.className = "col-priority-wrap";
-    priorityWrap.title = "優先權數字越大，在頁籤中排越前面";
-
-    const priorityLabel = document.createElement("label");
-    priorityLabel.className = "col-priority-label";
-    priorityLabel.textContent = "優先";
-    priorityLabel.htmlFor = `priority-${col.id}`;
-
-    const priorityInput = document.createElement("input");
-    priorityInput.className = "col-priority-input";
-    priorityInput.id = `priority-${col.id}`;
-    priorityInput.type = "number";
-    priorityInput.value = col.priority || 0;
-    priorityInput.addEventListener("input", (e) => {
-      const val = parseInt(e.target.value);
-      col.priority = isNaN(val) ? 0 : val;
-      saveStateToStorage();
-    });
-    priorityInput.addEventListener("change", () => {
-      renderAll();
-      autoGenerate();
-    });
-
-    priorityWrap.appendChild(priorityLabel);
-    priorityWrap.appendChild(priorityInput);
 
     metaRow.appendChild(categoryInput);
-    metaRow.appendChild(priorityWrap);
     metaRow.appendChild(toggleLabel);
     header.appendChild(metaRow);
     
@@ -3320,10 +3439,26 @@ function renderColumnsGrid() {
 
     // Items for this card's "⋯" menu (built on open so paste reflects the clipboard)
     const buildCardMenuItems = () => {
-      const items = [
+      const view = getVisibleSortedColumns();
+      const viewPos = view.indexOf(col);
+      const items = [];
+      if (viewPos > 0) {
+        items.push({
+          label: "⏫ 移到最前面",
+          hint: activeCategoryTab === "__all__" ? "生成時第一個出現" : `移到「${activeCategoryTab}」分類的最前面`,
+          onClick: () => moveColumnInView(col, "first")
+        });
+        items.push({ label: "⬆️ 上移一格", onClick: () => moveColumnInView(col, -1) });
+      }
+      if (viewPos < view.length - 1) {
+        items.push({ label: "⬇️ 下移一格", onClick: () => moveColumnInView(col, 1) });
+        items.push({ label: "⏬ 移到最後", onClick: () => moveColumnInView(col, "last") });
+      }
+      if (items.length) items.push({ divider: "" });
+      items.push(
         { label: "📋 複製此欄位", hint: "標題＋內容，之後可在任一欄後方貼上", onClick: () => copyColumn(col) },
         { label: "✂️ 剪下此欄位", hint: "複製後清空這一欄", onClick: () => cutColumn(col) }
-      ];
+      );
       if (getClipboard()) {
         items.push({ label: "📥 在後方貼上欄位", onClick: () => pasteColumnAfter(state.columns.indexOf(col)) });
       }
@@ -3595,7 +3730,7 @@ function setColCount(count) {
         active: true,
         lockedValue: null,
         category: newCategory,
-        priority: getDefaultPriorityForCategory(newCategory)
+        priority: 0
       });
     }
   } else if (state.columns.length > target) {
@@ -3720,7 +3855,7 @@ function pasteColumnAfter(index) {
     noRepeat: false,
     usedValues: [],
     category: clip.category || "",
-    priority: clip.priority || 0
+    priority: 0
   };
   state.columns.splice(index + 1, 0, newCol);
   state.columnCount = state.columns.length;
@@ -3853,7 +3988,7 @@ function insertColumnAfter(index) {
     active: true,
     lockedValue: null,
     category: newCategory,
-    priority: getDefaultPriorityForCategory(newCategory)
+    priority: 0
   };
   state.columns.splice(index + 1, 0, newCol);
   state.columnCount = state.columns.length;
@@ -4084,12 +4219,13 @@ function generatePrompt(shouldAnimate = true) {
   const generatedPrompts = [];
   const selectionsList = [];
   const resetNoticeShownFor = new Set(); // avoid spamming the same "cycled" toast within one batch
+  let firstOrderParts = [];              // what goes where in the first prompt, for the order strip
 
   for (let i = 0; i < genCount; i++) {
     let activeSegments = []; // array of { colIndex, originalIdx, label, pickText }
     
     // 1. Gather choices from active columns (in priority order, matching the UI)
-    getAllColumnsSortedByPriority().forEach((col) => {
+    state.columns.forEach((col) => {
       const idx = state.columns.indexOf(col);
       if (!col.active) return;
       
@@ -4173,6 +4309,7 @@ function generatePrompt(shouldAnimate = true) {
     let finalPromptList = activeSegments.map(seg => ({
       type: "column",
       originalIdx: seg.originalIdx,
+      label: seg.label,
       text: formatSegment(seg)
     }));
     
@@ -4213,10 +4350,12 @@ function generatePrompt(shouldAnimate = true) {
     
     // Re-assemble the prompt array
     let outputList = [];
+    const orderParts = []; // parallel to outputList: { kind: "col" | "tag", text }
     
     // A. Prepend Beginning tags
     if (beginningTags.length > 0) {
       outputList.push(beginningTags.join(state.settings.useComma ? ", " : "\n"));
+      orderParts.push({ kind: "tag", text: "開頭固定標籤" });
     }
     
     // B. Process columns and relative/middle inserts
@@ -4226,11 +4365,13 @@ function generatePrompt(shouldAnimate = true) {
     finalPromptList.forEach((colItem, idx) => {
       // Insert column item
       outputList.push(colItem.text);
+      orderParts.push({ kind: "col", text: `${colItem.originalIdx} ${colItem.label}`, colId: state.columns[colItem.originalIdx - 1].id });
       
       // Check if relative tags go after this original column index
       if (relativeTags[colItem.originalIdx]) {
         relativeTags[colItem.originalIdx].forEach(tagText => {
           outputList.push(tagText);
+          orderParts.push({ kind: "tag", text: "固定標籤" });
         });
         // Delete from relativeTags so we know it's placed
         delete relativeTags[colItem.originalIdx];
@@ -4239,6 +4380,7 @@ function generatePrompt(shouldAnimate = true) {
       // Check if middle tags insert here
       if (idx + 1 === middlePoint && middleTags.length > 0) {
         outputList.push(middleTags.join(state.settings.useComma ? ", " : "\n"));
+        orderParts.push({ kind: "tag", text: "中間固定標籤" });
       }
     });
     
@@ -4246,23 +4388,27 @@ function generatePrompt(shouldAnimate = true) {
     Object.keys(relativeTags).forEach(colNum => {
       relativeTags[colNum].forEach(tagText => {
         outputList.push(tagText);
+        orderParts.push({ kind: "tag", text: "固定標籤" });
       });
     });
     
     // D. If there are middle tags but no active columns, insert middle tags
     if (activeColCount === 0 && middleTags.length > 0) {
       outputList.push(middleTags.join(state.settings.useComma ? ", " : "\n"));
+      orderParts.push({ kind: "tag", text: "中間固定標籤" });
     }
     
     // E. Append End tags
     if (endTags.length > 0) {
       outputList.push(endTags.join(state.settings.useComma ? ", " : "\n"));
+      orderParts.push({ kind: "tag", text: "結尾固定標籤" });
     }
     
     // Combine all items with selected separator
     const separator = state.settings.useComma ? ", " : "\n";
     const finalPromptText = outputList.join(separator);
     generatedPrompts.push(finalPromptText);
+    if (i === 0) firstOrderParts = orderParts;
   }
 
   // Persist noRepeat usedValues (and lastSelectedValue) updated during this batch
@@ -4322,10 +4468,54 @@ function generatePrompt(shouldAnimate = true) {
     showToast(toastMsg, "info");
   }
 
+  renderOrderStrip(firstOrderParts);
+
   // Update the bottom dock preview
   if (generatedPrompts.length > 0) {
     updateDockPreview(generatedPrompts[0], generatedPrompts.length);
   }
+}
+
+// ---------------------------------
+// Order strip: shows what ends up first in the prompt
+// ---------------------------------
+
+function renderOrderStrip(parts) {
+  const strip = document.getElementById("orderStrip");
+  if (!strip) return;
+  strip.innerHTML = "";
+  if (!parts || parts.length === 0) {
+    strip.hidden = true;
+    return;
+  }
+  strip.hidden = false;
+  const label = document.createElement("span");
+  label.className = "order-strip-label";
+  label.textContent = "生成順序：";
+  strip.appendChild(label);
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      const arrow = document.createElement("span");
+      arrow.className = "order-strip-arrow";
+      arrow.textContent = "→";
+      strip.appendChild(arrow);
+    }
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `order-chip ${part.kind}`;
+    chip.textContent = part.kind === "tag" ? `📌 ${part.text}` : part.text;
+    chip.title = part.kind === "tag" ? "捲動到固定附加標籤（可在那裡改位置）" : "捲動到這個欄位";
+    chip.addEventListener("click", () => {
+      if (part.kind === "col") {
+        activeCategoryTab = "__all__";
+        renderAll();
+        flashColumnCard(part.colId);
+      } else {
+        document.querySelector(".always-tags-section").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+    strip.appendChild(chip);
+  });
 }
 
 // ---------------------------------
