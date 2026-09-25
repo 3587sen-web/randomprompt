@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260924">
+  <link rel="stylesheet" href="style.css?v=20260925b">
 </head>
 <body>
 
@@ -108,6 +108,7 @@
         <h2>生成的提示詞結果</h2>
         <span class="output-hint">用畫面底部的「🔮 隨機生成」產生新結果</span>
       </div>
+      <div class="order-strip" id="orderStrip" hidden></div>
       <div class="outputs-grid" id="outputsGrid">
         <div class="output-card">
           <div class="output-box-container">
@@ -137,10 +138,16 @@
           <!-- Rendered dynamically by app.js -->
         </div>
         <div class="tool-group" aria-label="分類與素材庫工具">
-        <button type="button" class="btn-hdr-toggle" id="btnCategoryDefaults" title="查看/調整每個分類的預設優先權，之後新增欄位會套用">⚙️ 分類優先權</button>
-        <button type="button" class="btn-hdr-toggle" id="btnLibraryManager" title="瀏覽/改名/編輯/刪除共用素材庫項目">🔗 素材庫</button>
-        <button type="button" class="btn-hdr-toggle" id="btnAutoLinkByTitle" title="掃描目前所有欄位，標題跟素材庫項目完全相同的自動一次連結，不用一個個手動連">🪄 自動比對連結</button>
-        <button type="button" class="btn-hdr-toggle" id="btnBatchAddFromLibrary" title="從素材庫勾選多個項目，一次新增對應數量的欄位並自動連結">📦 批次加入主題</button>
+        <button type="button" class="btn-hdr-toggle" id="btnCategoryDefaults" title="依分類一次重新排列所有欄位">⚙️ 依分類排序</button>
+        <div class="menu-wrap">
+          <button type="button" class="btn-hdr-toggle menu-trigger" id="btnLibraryMenu" aria-haspopup="true" aria-expanded="false" title="共用素材庫：改一次，所有設定檔一起更新">🔗 素材庫 ▾</button>
+          <div class="menu-panel align-right" id="libraryMenu" role="menu">
+            <button type="button" class="menu-item" id="btnLibraryManager" role="menuitem">📚 管理素材庫<small>新增、編輯、看每個素材用在哪些設定檔</small></button>
+            <button type="button" class="menu-item" id="btnAutoLinkByTitle" role="menuitem">🪄 自動連結同名欄位<small>把標題跟素材同名的欄位連上，可一次處理所有設定檔</small></button>
+            <button type="button" class="menu-item" id="btnBuildLibrary" role="menuitem">🧩 從設定檔建立素材庫<small>找出各設定檔共用的欄位，一次建成素材</small></button>
+            <button type="button" class="menu-item" id="btnBatchAddFromLibrary" role="menuitem">📦 批次加入主題<small>勾選多個素材，一次新增成欄位</small></button>
+          </div>
+        </div>
         </div>
       </div>
 
@@ -148,11 +155,11 @@
       <div class="modal-overlay" id="categoryDefaultsModal">
         <div class="modal-content glass">
           <div class="modal-header">
-            <h3>分類預設優先權設定</h3>
+            <h3>依分類排序</h3>
             <button class="modal-close" id="categoryDefaultsCloseX">&times;</button>
           </div>
           <div class="modal-body">
-            <p class="category-defaults-hint">✏️改名會同步更新所有正在使用的欄位；🗑️只會從「預設清單」移除，不會動到現有欄位；調整優先權數字後，之後在該分類新增的欄位會直接套用，不會跳回系統建議值。</p>
+            <p class="category-defaults-hint">欄位的先後就是生成的先後。想依分類整理時，先在下面調整每個分類的數字（大的排前面），再按「依分類重新排序」，只會排這一次，之後仍可自由拖曳。<br>✏️ 改名會同步更新所有使用中的欄位；🗑️ 只會從預設清單移除，不會動到現有欄位。</p>
             <div class="category-defaults-list" id="categoryDefaultsList">
               <!-- Rendered dynamically by app.js -->
             </div>
@@ -160,6 +167,7 @@
           <div class="modal-footer">
             <button class="btn btn-secondary" id="btnAddPresetCategory">＋ 新增預設分類</button>
             <button class="btn btn-secondary" id="categoryDefaultsCloseBtn">關閉</button>
+            <button class="btn btn-primary" id="btnSortByCategory">↕️ 依分類重新排序</button>
           </div>
         </div>
       </div>
@@ -213,14 +221,35 @@
             <button class="modal-close" id="libraryManagerCloseX">&times;</button>
           </div>
           <div class="modal-body">
-            <p class="category-defaults-hint">素材庫是跨設定檔共用的內容池：編輯這裡的內容，所有連結它的欄位都會同步更新。</p>
+            <p class="category-defaults-hint">素材庫是所有設定檔共用的內容：在這裡改一次（例如 Nike 球鞋從 100 款補到 500 款），所有連結它的設定檔都會一起更新。每一項會顯示目前用在哪裡。</p>
             <input type="text" id="libraryManagerSearch" class="modal-input" placeholder="輸入關鍵字搜尋...">
             <div class="library-manager-list" id="libraryManagerList">
               <!-- Rendered dynamically by app.js -->
             </div>
           </div>
           <div class="modal-footer">
+            <button class="btn btn-primary" id="btnAddLibraryItem">＋ 新增素材</button>
             <button class="btn btn-secondary" id="libraryManagerCloseBtn">關閉</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Checklist wizard: auto-link / build library from presets -->
+      <div class="modal-overlay" id="wizardModal">
+        <div class="modal-content glass wizard-content">
+          <div class="modal-header">
+            <h3 id="wizardTitle">精靈</h3>
+            <button class="modal-close" id="wizardCloseX">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p class="category-defaults-hint" id="wizardIntro"></p>
+            <div class="wizard-scopes" id="wizardScopes" hidden></div>
+            <div class="wizard-list" id="wizardList"></div>
+            <p class="wizard-note" id="wizardNote" hidden></p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="wizardCancelBtn">取消</button>
+            <button class="btn btn-primary" id="wizardConfirmBtn">確認</button>
           </div>
         </div>
       </div>
@@ -324,6 +353,6 @@
   <!-- Shared popover for per-column "⋯" menus -->
   <div class="menu-panel card-menu-portal" id="cardMenuPortal" role="menu"></div>
 
-  <script src="app.js?v=20260924"></script>
+  <script src="app.js?v=20260925b"></script>
 </body>
 </html>

@@ -1308,6 +1308,85 @@ function isColumnLinked(col) {
   return !!(col.linkedBlockId && library[col.linkedBlockId]);
 }
 
+// "Nike 球鞋" / "nike球鞋" / "ＮＩＫＥ 球鞋" all compare equal
+function normalizeTitle(title) {
+  return (title || "").normalize("NFKC").toLowerCase().replace(/\s+/g, "");
+}
+
+function normalizeContent(content) {
+  return (content || "").split("\n").map(l => l.trim()).filter(l => l !== "").join("\n");
+}
+
+function countLines(content) {
+  return (content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
+}
+
+// Link a column (in the workspace or inside a stored preset) to a library block.
+// The column keeps its own text in col.content as a backup, so nothing is lost
+// if it is unlinked later or the block gets deleted.
+function linkColumnToBlock(col, block) {
+  col.content = getColumnEffectiveContent(col);
+  col.linkedBlockId = block.id;
+}
+
+// Columns of a stored preset in the current format (older formats are skipped)
+function getPresetColumns(preset) {
+  return preset && Array.isArray(preset.columns) && preset.columns.every(c => c && typeof c === "object")
+    ? preset.columns
+    : [];
+}
+
+// blockId -> { workspace: number, presets: string[] }
+function getLibraryUsage() {
+  const usage = {};
+  const bump = (id) => (usage[id] = usage[id] || { workspace: 0, presets: [] });
+  state.columns.forEach(c => { if (c.linkedBlockId) bump(c.linkedBlockId).workspace++; });
+  Object.entries(getPresetsFromStorage()).forEach(([name, preset]) => {
+    getPresetColumns(preset).forEach(c => {
+      if (!c.linkedBlockId) return;
+      const u = bump(c.linkedBlockId);
+      if (!u.presets.includes(name)) u.presets.push(name);
+    });
+  });
+  return usage;
+}
+
+function describeUsage(u) {
+  if (!u || (u.workspace === 0 && u.presets.length === 0)) return "尚未被使用";
+  const parts = [];
+  if (u.workspace) parts.push(`目前畫面 ${u.workspace} 欄`);
+  if (u.presets.length) parts.push(`${u.presets.length} 個設定檔`);
+  return parts.join("・");
+}
+
+// Delete a library block everywhere: every column that used it (workspace and
+// every saved preset) gets the block's latest content written back as plain text.
+function deleteLibraryBlockEverywhere(block) {
+  const presets = getPresetsFromStorage();
+  let presetsTouched = 0;
+  Object.values(presets).forEach(preset => {
+    let touched = false;
+    getPresetColumns(preset).forEach(c => {
+      if (c.linkedBlockId === block.id) {
+        c.content = block.content || "";
+        c.linkedBlockId = null;
+        touched = true;
+      }
+    });
+    if (touched) presetsTouched++;
+  });
+  if (presetsTouched) savePresetsToStorage(presets);
+  state.columns.forEach(c => {
+    if (c.linkedBlockId === block.id) {
+      c.content = block.content || "";
+      c.linkedBlockId = null;
+    }
+  });
+  delete library[block.id];
+  saveLibraryToStorage();
+  saveStateToStorage();
+}
+
 function createLibraryBlock(title, category, content) {
   const id = "blk_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
   library[id] = { id, title, category: category || "", content: content || "", createdAt: Date.now() };
@@ -1315,58 +1394,313 @@ function createLibraryBlock(title, category, content) {
   return id;
 }
 
-// Bulk-link every currently unlinked column whose title EXACTLY matches an
-// existing library item's title — saves clicking "🔗 連結素材庫" one column
-// at a time when a new theme reuses a lot of already-catalogued item names.
-async function autoLinkColumnsByTitle() {
-  // Build a lookup of library items by exact title (skip ambiguous titles
-  // that match more than one library item — those need a manual/deliberate pick)
+// ---------------------------------
+// Checklist wizard (shared by "自動連結同名欄位" and "從設定檔建立素材庫")
+// ---------------------------------
+// config: { title, intro, scopes?: [{ value, label, disabled? }], scope?,
+//           build(scope) -> { rows: [{ label, sub, badge, badgeKind, checked, disabled }], note },
+//           confirmLabel(n) -> string, onConfirm(checkedRows, scope) }
+let wizardConfig = null;
+let wizardRows = [];
+
+function openWizard(config) {
+  wizardConfig = config;
+  const modal = document.getElementById("wizardModal");
+  document.getElementById("wizardTitle").textContent = config.title;
+  document.getElementById("wizardIntro").textContent = config.intro;
+
+  const scopesEl = document.getElementById("wizardScopes");
+  scopesEl.innerHTML = "";
+  scopesEl.hidden = !config.scopes;
+  (config.scopes || []).forEach(opt => {
+    const label = document.createElement("label");
+    label.className = "wizard-scope" + (opt.disabled ? " disabled" : "");
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "wizardScope";
+    radio.value = opt.value;
+    radio.disabled = !!opt.disabled;
+    radio.checked = opt.value === config.scope;
+    radio.addEventListener("change", () => {
+      config.scope = opt.value;
+      renderWizardRows();
+    });
+    const text = document.createElement("span");
+    text.textContent = opt.label;
+    label.append(radio, text);
+    scopesEl.appendChild(label);
+  });
+
+  renderWizardRows();
+  modal.style.display = "flex";
+  setTimeout(() => modal.classList.add("active"), 10);
+}
+
+function closeWizard() {
+  const modal = document.getElementById("wizardModal");
+  modal.classList.remove("active");
+  setTimeout(() => { modal.style.display = "none"; }, 250);
+  wizardConfig = null;
+}
+
+function updateWizardCount() {
+  const n = wizardRows.filter(r => r.checked && !r.disabled).length;
+  const btn = document.getElementById("wizardConfirmBtn");
+  btn.textContent = wizardConfig.confirmLabel(n);
+  btn.disabled = n === 0;
+}
+
+function renderWizardRows() {
+  const list = document.getElementById("wizardList");
+  const note = document.getElementById("wizardNote");
+  const result = wizardConfig.build(wizardConfig.scope);
+  wizardRows = result.rows;
+  list.innerHTML = "";
+  note.textContent = result.note || "";
+  note.hidden = !result.note;
+
+  if (wizardRows.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "category-defaults-empty";
+    empty.textContent = result.emptyText || "沒有找到可以處理的項目。";
+    list.appendChild(empty);
+  }
+
+  wizardRows.forEach(row => {
+    const label = document.createElement("label");
+    label.className = "wizard-row" + (row.disabled ? " disabled" : "");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !!row.checked && !row.disabled;
+    cb.disabled = !!row.disabled;
+    cb.addEventListener("change", () => {
+      row.checked = cb.checked;
+      updateWizardCount();
+    });
+    const body = document.createElement("span");
+    body.className = "wizard-row-body";
+    const main = document.createElement("span");
+    main.className = "wizard-row-label";
+    main.textContent = row.label;
+    const sub = document.createElement("span");
+    sub.className = "wizard-row-sub";
+    sub.textContent = row.sub || "";
+    body.append(main, sub);
+    label.append(cb, body);
+    if (row.badge) {
+      const badge = document.createElement("span");
+      badge.className = `wizard-badge ${row.badgeKind || ""}`;
+      badge.textContent = row.badge;
+      label.appendChild(badge);
+    }
+    list.appendChild(label);
+  });
+  updateWizardCount();
+}
+
+async function confirmWizard() {
+  if (!wizardConfig) return;
+  const config = wizardConfig;
+  const checked = wizardRows.filter(r => r.checked && !r.disabled);
+  if (checked.length === 0) return;
+  closeWizard();
+  await config.onConfirm(checked, config.scope);
+}
+
+// ---------------------------------
+// 自動連結同名欄位：link unlinked columns whose title matches a library item.
+// Scope: checked columns / current screen / current screen + every saved preset.
+// ---------------------------------
+function collectAutoLinkRows(scope) {
   const byTitle = new Map();
   const ambiguous = new Set();
   Object.values(library).forEach(block => {
-    const t = block.title.trim();
-    if (!t) return;
-    if (byTitle.has(t)) {
-      ambiguous.add(t);
-    } else {
-      byTitle.set(t, block);
-    }
+    const key = normalizeTitle(block.title);
+    if (!key) return;
+    if (byTitle.has(key)) ambiguous.add(key);
+    else byTitle.set(key, block);
   });
 
-  const matches = [];
-  state.columns.forEach(col => {
-    if (col.linkedBlockId) return; // already linked, skip
-    const t = (col.title || "").trim();
-    if (!t || ambiguous.has(t)) return;
-    const block = byTitle.get(t);
-    if (block) matches.push({ col, block });
-  });
+  const presets = scope === "all" ? getPresetsFromStorage() : null;
+  const rows = [];
+  let alreadyLinked = 0;
+  let ambiguousCount = 0;
 
-  if (matches.length === 0) {
-    const ambiguousNote = ambiguous.size > 0
-      ? `（有 ${ambiguous.size} 個標題在素材庫中對應到多個項目，這種需要手動挑選，已略過）`
-      : "";
-    showToast(`沒有找到標題完全相符、且尚未連結的欄位可以自動比對${ambiguousNote}`, "error");
-    return;
+  const consider = (col, where) => {
+    const key = normalizeTitle(col.title);
+    if (!key || (!byTitle.has(key) && !ambiguous.has(key))) return;
+    if (isColumnLinked(col)) { alreadyLinked++; return; }
+    if (ambiguous.has(key)) { ambiguousCount++; return; }
+    const block = byTitle.get(key);
+    const own = normalizeContent(col.content);
+    const same = own === "" || own === normalizeContent(block.content);
+    rows.push({
+      col, block, where,
+      label: `${where}　${col.title.trim()} → 素材「${block.title}」`,
+      sub: same
+        ? `內容相同（${countLines(block.content)} 行），連結後會跟著素材庫更新`
+        : `內容不同：這一欄 ${countLines(col.content)} 行、素材庫 ${countLines(block.content)} 行。勾選＝改用素材庫版本（原內容會保留備份）`,
+      badge: same ? "內容相同" : "內容不同",
+      badgeKind: same ? "ok" : "warn",
+      checked: same
+    });
+  };
+
+  const workspaceCols = scope === "selected"
+    ? state.columns.filter(c => selectedColumnIds.has(c.id))
+    : state.columns;
+  workspaceCols.forEach(c => consider(c, "目前畫面"));
+  if (presets) {
+    Object.entries(presets).forEach(([name, preset]) => {
+      getPresetColumns(preset).forEach(c => consider(c, `設定檔「${name}」`));
+    });
   }
 
-  const previewNames = matches.slice(0, 8).map(m => `「${m.col.title}」`).join("、");
-  const moreNote = matches.length > 8 ? ` 等共 ${matches.length} 個` : "";
-  const confirmed = await showCustomConfirm(
-    "自動比對連結",
-    `找到 ${matches.length} 個欄位的標題跟素材庫項目完全相符：\n${previewNames}${moreNote}\n\n確定要全部自動連結嗎？連結後這些欄位的內容會改用素材庫的內容。`
-  );
-  if (!confirmed) return;
+  const notes = [];
+  if (alreadyLinked) notes.push(`${alreadyLinked} 欄已經連結，會自動保持最新，不需要再處理`);
+  if (ambiguousCount) notes.push(`${ambiguousCount} 欄的標題在素材庫有多個同名項目，請用卡片「⋯ → 連結素材庫」手動挑選`);
+  return {
+    rows,
+    presets,
+    note: notes.join("；"),
+    emptyText: Object.keys(library).length === 0
+      ? "素材庫還是空的。先用「🧩 從設定檔建立素材庫」或「📚 管理素材庫 → ＋ 新增素材」建立素材。"
+      : "沒有找到「標題跟素材庫同名、而且還沒連結」的欄位。"
+  };
+}
 
-  matches.forEach(({ col, block }) => {
-    col.linkedBlockId = block.id;
-    col.content = "";
+function autoLinkColumnsByTitle() {
+  const selectedCount = state.columns.filter(c => selectedColumnIds.has(c.id)).length;
+  let lastPresets = null;
+  openWizard({
+    title: "🪄 自動連結同名欄位",
+    intro: "找出標題跟素材庫項目同名（不分大小寫、全半形、空白）的欄位，連上素材庫。連上之後，只要在素材庫改一次，所有用到的設定檔都會一起更新，不需要再按這個按鈕。",
+    scopes: [
+      { value: "selected", label: `勾選的欄位（${selectedCount} 欄）`, disabled: selectedCount === 0 },
+      { value: "screen", label: "目前畫面的所有欄位" },
+      { value: "all", label: "目前畫面＋所有已存的設定檔" }
+    ],
+    scope: selectedCount > 0 ? "selected" : "all",
+    build: (scope) => {
+      const result = collectAutoLinkRows(scope);
+      lastPresets = result.presets;
+      return result;
+    },
+    confirmLabel: (n) => `連結 ${n} 欄`,
+    onConfirm: (rows) => {
+      let presetTouched = false;
+      rows.forEach(r => {
+        linkColumnToBlock(r.col, r.block);
+        if (r.where !== "目前畫面") presetTouched = true;
+      });
+      if (presetTouched && lastPresets) savePresetsToStorage(lastPresets);
+      saveStateToStorage();
+      renderAll();
+      autoGenerate();
+      showToast(`🪄 已連結 ${rows.length} 欄到素材庫`, "success");
+    }
   });
+}
 
-  saveStateToStorage();
-  renderAll();
-  autoGenerate();
-  showToast(`🪄 已自動連結 ${matches.length} 個欄位到素材庫`, "success");
+// ---------------------------------
+// 從設定檔建立素材庫：find columns that share a title across the screen and saved
+// presets with identical content, turn each into one library item and link them all.
+// ---------------------------------
+function collectLibrarySeedRows() {
+  const presets = getPresetsFromStorage();
+  const existing = new Set(Object.values(library).map(b => normalizeTitle(b.title)));
+  const groups = new Map(); // normalized title -> { title, entries: [{ col, where }], contents: Set }
+
+  const add = (col, where) => {
+    if (isColumnLinked(col)) return;
+    const key = normalizeTitle(col.title);
+    const content = normalizeContent(col.content);
+    if (!key || !content || existing.has(key)) return;
+    if (!groups.has(key)) groups.set(key, { title: col.title.trim(), entries: [], contents: new Set(), categories: new Set() });
+    const g = groups.get(key);
+    g.entries.push({ col, where });
+    g.contents.add(content);
+    g.categories.add(col.category || "");
+  };
+  state.columns.forEach(c => add(c, "目前畫面"));
+  Object.entries(presets).forEach(([name, preset]) => getPresetColumns(preset).forEach(c => add(c, `「${name}」`)));
+
+  const rows = [];
+  let singles = 0;
+  [...groups.values()].forEach(g => {
+    if (g.entries.length < 2) { singles++; return; }
+    const places = [...new Set(g.entries.map(e => e.where))].join("、");
+    if (g.contents.size === 1) {
+      rows.push({
+        group: g,
+        label: `${g.title}（${countLines(g.entries[0].col.content)} 行）`,
+        sub: `用在：${places}`,
+        badge: "內容相同",
+        badgeKind: "ok",
+        checked: true
+      });
+    } else {
+      rows.push({
+        group: g,
+        label: `${g.title}`,
+        sub: `用在：${places}。內容有 ${g.contents.size} 種版本，無法自動合併；如果是刻意不同就保持原樣，想共用的話先把內容改成一致。`,
+        badge: `${g.contents.size} 種版本`,
+        badgeKind: "warn",
+        disabled: true
+      });
+    }
+  });
+  rows.sort((a, b) => (a.disabled === b.disabled ? 0 : a.disabled ? 1 : -1));
+  return {
+    rows,
+    presets,
+    note: singles ? `另有 ${singles} 個標題只出現在一個地方，沒有共用的必要，所以沒有列出（需要的話可用欄位「⋯ → 另存為素材庫項目」）。` : "",
+    emptyText: "沒有找到「在兩個以上地方出現、而且還沒放進素材庫」的欄位。"
+  };
+}
+
+function buildLibraryFromPresets() {
+  let lastPresets = null;
+  openWizard({
+    title: "🧩 從設定檔建立素材庫",
+    intro: "掃描目前畫面和所有已存的設定檔，找出標題相同、內容也相同的欄位。勾選的會各建成一個素材，並把所有用到的欄位連上它；之後只要改素材庫一次，全部設定檔一起更新。",
+    build: () => {
+      const result = collectLibrarySeedRows();
+      lastPresets = result.presets;
+      return result;
+    },
+    confirmLabel: (n) => `建立 ${n} 個素材並連結`,
+    onConfirm: (rows) => {
+      let linked = 0;
+      rows.forEach(r => {
+        const g = r.group;
+        const category = g.categories.size === 1 ? [...g.categories][0] : "";
+        const id = createLibraryBlock(g.title, category, g.entries[0].col.content);
+        g.entries.forEach(e => {
+          linkColumnToBlock(e.col, library[id]);
+          linked++;
+        });
+      });
+      if (lastPresets) savePresetsToStorage(lastPresets);
+      saveStateToStorage();
+      renderAll();
+      autoGenerate();
+      showToast(`🧩 已建立 ${rows.length} 個素材，連結 ${linked} 欄`, "success");
+    }
+  });
+}
+
+async function addNewLibraryItem() {
+  const name = await showCustomPrompt("新增素材", "素材名稱（建議跟欄位標題相同，之後就能用「自動連結同名欄位」一次連上）：", "");
+  if (name === null || name.trim() === "") return;
+  const id = createLibraryBlock(name.trim(), "", "");
+  elements.libraryManagerSearch.value = name.trim();
+  renderLibraryManagerList(name.trim());
+  const row = elements.libraryManagerList.querySelector(`[data-block-id="${id}"] .library-manager-row-header`);
+  if (row) row.click(); // open the editor right away
+  const ta = elements.libraryManagerList.querySelector(`[data-block-id="${id}"] textarea`);
+  if (ta) ta.focus();
+  showToast(`已新增素材「${name.trim()}」，在下方輸入內容（每行一個）`, "success");
 }
 
 // ---------------------------------
@@ -1451,9 +1785,16 @@ function renderLibraryBatchAddList(query) {
 
       const info = document.createElement("div");
       info.className = "library-picker-info";
-      const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
-      info.innerHTML = `<span class="library-picker-title">${block.title}</span>` +
-        `<span class="library-picker-count">${lineCount} 行</span>`;
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "library-picker-title";
+      titleSpan.textContent = block.title;
+      const countSpan = document.createElement("span");
+      countSpan.className = "library-picker-count";
+      countSpan.textContent = `${countLines(block.content)} 行`;
+      const previewSpan = document.createElement("span");
+      previewSpan.className = "library-picker-preview";
+      previewSpan.textContent = normalizeContent(block.content).split("\n").slice(0, 3).join("、") || "（空的）";
+      info.append(titleSpan, countSpan, previewSpan);
 
       row.appendChild(checkbox);
       row.appendChild(info);
@@ -1495,7 +1836,7 @@ async function confirmLibraryBatchAdd() {
       active: true,
       lockedValue: null,
       category: block.category || "",
-      priority: getDefaultPriorityForCategory(block.category),
+      priority: 0,
       linkedBlockId: block.id
     });
   });
@@ -1566,13 +1907,14 @@ function renderLibraryPickerList(query) {
     const groupHeader = document.createElement("button");
     groupHeader.type = "button";
     groupHeader.className = "library-manager-group-header";
-    groupHeader.innerHTML = `<span class="lmg-arrow">▸</span> ${catName} <span class="lmg-count">${blocks.length}</span>`;
+    groupHeader.innerHTML = `<span class="lmg-arrow">▸</span> <span class="lmg-name"></span> <span class="lmg-count">${blocks.length}</span>`;
+    groupHeader.querySelector(".lmg-name").textContent = catName;
 
     const groupBody = document.createElement("div");
     groupBody.className = "library-manager-group-body";
     groupBody.style.display = "none";
 
-    if (q) {
+    if (q || items.length <= 30) {
       groupBody.style.display = "flex";
       groupHeader.classList.add("expanded");
     }
@@ -1589,18 +1931,33 @@ function renderLibraryPickerList(query) {
 
       const info = document.createElement("div");
       info.className = "library-picker-info";
-      const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
-      info.innerHTML = `<span class="library-picker-title">${block.title}</span>` +
-        `<span class="library-picker-count">${lineCount} 行</span>`;
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "library-picker-title";
+      titleSpan.textContent = block.title;
+      const countSpan = document.createElement("span");
+      countSpan.className = "library-picker-count";
+      countSpan.textContent = `${countLines(block.content)} 行`;
+      const previewSpan = document.createElement("span");
+      previewSpan.className = "library-picker-preview";
+      previewSpan.textContent = normalizeContent(block.content).split("\n").slice(0, 3).join("、") || "（空的）";
+      info.append(titleSpan, countSpan, previewSpan);
 
       const selectBtn = document.createElement("button");
       selectBtn.type = "button";
       selectBtn.className = "btn btn-primary btn-sm";
       selectBtn.textContent = "連結這一項";
-      selectBtn.addEventListener("click", () => {
-        if (!libraryPickerTargetCol) return;
-        libraryPickerTargetCol.linkedBlockId = block.id;
-        libraryPickerTargetCol.content = ""; // library content is now the source of truth
+      selectBtn.addEventListener("click", async () => {
+        const col = libraryPickerTargetCol;
+        if (!col) return;
+        const own = normalizeContent(getColumnEffectiveContent(col));
+        if (own && own !== normalizeContent(block.content)) {
+          const ok = await showCustomConfirm(
+            "內容不一樣",
+            `這一欄目前有 ${countLines(own)} 行，素材「${block.title}」有 ${countLines(block.content)} 行，內容不同。\n連結後會改用素材庫的內容；這一欄原本的內容會保留成備份，之後「解除連結」時可以選擇還原。`
+          );
+          if (!ok) return;
+        }
+        linkColumnToBlock(col, block);
         saveStateToStorage();
         closeAllOverlayModals();
         renderAll();
@@ -1634,12 +1991,20 @@ function renderLibraryManagerList(query) {
   if (items.length === 0) {
     const empty = document.createElement("p");
     empty.className = "category-defaults-empty";
-    empty.textContent = Object.keys(library).length === 0
-      ? "素材庫目前還是空的。"
-      : "沒有符合關鍵字的素材庫項目";
+    if (Object.keys(library).length === 0) {
+      empty.classList.add("library-empty-guide");
+      empty.innerText = "素材庫還是空的。三種開始方式：\n" +
+        "① 按下方「＋ 新增素材」，自己建一項（例如「Nike球鞋」）\n" +
+        "② 在欄位卡片的「⋯」選「📤 另存為素材庫項目」\n" +
+        "③ 素材庫 ▾ →「🧩 從設定檔建立素材庫」，一次找出各設定檔共用的欄位";
+    } else {
+      empty.textContent = "沒有符合關鍵字的素材庫項目";
+    }
     elements.libraryManagerList.appendChild(empty);
     return;
   }
+
+  const usage = getLibraryUsage();
 
   // Group by category so a large library stays browsable
   const groups = new Map(); // category -> blocks[]
@@ -1667,14 +2032,15 @@ function renderLibraryManagerList(query) {
     const groupHeader = document.createElement("button");
     groupHeader.type = "button";
     groupHeader.className = "library-manager-group-header";
-    groupHeader.innerHTML = `<span class="lmg-arrow">▸</span> ${catName} <span class="lmg-count">${blocks.length}</span>`;
+    groupHeader.innerHTML = `<span class="lmg-arrow">▸</span> <span class="lmg-name"></span> <span class="lmg-count">${blocks.length}</span>`;
+    groupHeader.querySelector(".lmg-name").textContent = catName;
 
     const groupBody = document.createElement("div");
     groupBody.className = "library-manager-group-body";
     groupBody.style.display = "none";
 
     // Auto-expand groups when actively searching, so matches are visible
-    if (q) {
+    if (q || items.length <= 30) {
       groupBody.style.display = "flex";
       groupHeader.classList.add("expanded");
     }
@@ -1733,7 +2099,7 @@ function renderLibraryManagerList(query) {
     }
 
     blocks.forEach(block => {
-      groupBody.appendChild(renderLibraryManagerRow(block));
+      groupBody.appendChild(renderLibraryManagerRow(block, usage[block.id]));
     });
 
     groupWrap.appendChild(groupHeaderRow);
@@ -1746,12 +2112,13 @@ function renderLibraryManagerList(query) {
 // only created once the row is expanded, so browsing a 250+ item library
 // doesn't mean rendering 250+ live <textarea> elements (some with 1000+
 // lines) at once.
-function renderLibraryManagerRow(block) {
-  const usedByCount = state.columns.filter(c => c.linkedBlockId === block.id).length;
-  const lineCount = (block.content || "").split("\n").map(l => l.trim()).filter(l => l !== "").length;
+function renderLibraryManagerRow(block, usage) {
+  const u = usage || { workspace: 0, presets: [] };
+  const lineCount = countLines(block.content);
 
   const row = document.createElement("div");
   row.className = "library-manager-row";
+  row.dataset.blockId = block.id;
 
   const headerRow = document.createElement("div");
   headerRow.className = "library-manager-row-header";
@@ -1768,7 +2135,8 @@ function renderLibraryManagerRow(block) {
 
   const metaEl = document.createElement("span");
   metaEl.className = "library-manager-meta";
-  metaEl.textContent = `${lineCount} 行・${usedByCount} 個欄位連結中`;
+  metaEl.textContent = `${lineCount} 行・${describeUsage(u)}`;
+  metaEl.title = u.presets.length ? `使用中的設定檔：${u.presets.join("、")}` : "";
 
   const categorySelect = document.createElement("select");
   categorySelect.className = "library-manager-cat-select";
@@ -1840,21 +2208,18 @@ function renderLibraryManagerRow(block) {
   deleteBtn.title = "刪除這個素材庫項目";
   deleteBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
-    const warningMsg = usedByCount > 0
-      ? `目前工作區中有 ${usedByCount} 個欄位正在連結「${block.title}」。\n刪除後，這些欄位會自動解除連結，並把目前的內容保留在欄位自己身上（不會變空白），但之後不會再跟著素材庫同步。\n\n確定要刪除嗎？`
+    const inUse = u.workspace > 0 || u.presets.length > 0;
+    const where = [
+      u.workspace ? `目前畫面 ${u.workspace} 欄` : null,
+      u.presets.length ? `設定檔：${u.presets.join("、")}` : null
+    ].filter(Boolean).join("\n");
+    const warningMsg = inUse
+      ? `「${block.title}」正在被使用：\n${where}\n\n刪除後，這些欄位會解除連結，並把素材目前的內容（${lineCount} 行）寫回欄位自己身上，不會變空白；之後不再跟著素材庫同步。\n\n確定要刪除嗎？`
       : `確定要刪除素材庫項目「${block.title}」嗎？`;
-    const confirmed = await showCustomConfirm("刪除素材庫項目", warningMsg);
+    const confirmed = await showCustomConfirm("刪除素材庫項目", warningMsg, true);
     if (!confirmed) return;
 
-    state.columns.forEach(c => {
-      if (c.linkedBlockId === block.id) {
-        c.content = block.content || "";
-        c.linkedBlockId = null;
-      }
-    });
-    delete library[block.id];
-    saveLibraryToStorage();
-    saveStateToStorage();
+    deleteLibraryBlockEverywhere(block);
     renderLibraryManagerList(elements.libraryManagerSearch.value);
     renderAll();
     showToast(`🗑️ 已刪除素材庫項目「${block.title}」`, "success");
@@ -1884,7 +2249,7 @@ function renderLibraryManagerRow(block) {
         block.content = e.target.value;
         saveLibraryToStorage();
         const lc = e.target.value.split("\n").map(l => l.trim()).filter(l => l !== "").length;
-        metaEl.textContent = `${lc} 行・${usedByCount} 個欄位連結中`;
+        metaEl.textContent = `${lc} 行・${describeUsage(u)}`;
       });
       textarea.addEventListener("change", () => {
         renderAll();
@@ -2042,33 +2407,80 @@ function getCategoryDropdownOptions() {
 
 // Columns to display for the active tab, sorted by priority (highest first)
 function getVisibleSortedColumns() {
-  const filtered = activeCategoryTab === "__all__"
+  // Card order on screen == order in state.columns == order in the prompt.
+  return activeCategoryTab === "__all__"
     ? state.columns.slice()
     : state.columns.filter(c => (c.category || "") === activeCategoryTab);
-
-  return filtered
-    .map((col, i) => ({ col, i }))
-    .sort((a, b) => (b.col.priority || 0) - (a.col.priority || 0) || a.i - b.i)
-    .map(x => x.col);
 }
 
-// ALL columns sorted by priority (highest first), ignoring which tab is
-// currently open. Used for prompt generation so the output order always
-// matches the priority order, no matter which category tab you're viewing.
-function getAllColumnsSortedByPriority() {
-  return state.columns
+// Older versions ordered cards by a hidden per-column "priority" number.
+// Convert that once into plain array order (keeping what the user saw),
+// then zero it out so it never reorders anything again. Safe to call often.
+function normalizeColumnOrder() {
+  if (!state.columns.some(c => (c.priority || 0) !== 0)) return false;
+  state.columns = state.columns
     .map((col, i) => ({ col, i }))
     .sort((a, b) => (b.col.priority || 0) - (a.col.priority || 0) || a.i - b.i)
-    .map(x => x.col);
+    .map(x => { x.col.priority = 0; return x.col; });
+  state.columnCount = state.columns.length;
+  return true;
 }
 
-// Reassign priority values so that `orderedCols` (top-to-bottom) sorts back
-// into that same order next render. Only touches columns in the current view.
-function reassignPriorityFromOrder(orderedCols) {
-  const n = orderedCols.length;
-  orderedCols.forEach((col, i) => {
-    col.priority = n - i;
-  });
+// Write a reordered view back into state.columns. In a category tab only
+// those columns swap places among the slots they already occupy; every
+// other column stays exactly where it was.
+function applyViewOrder(orderedViewCols) {
+  const viewIds = new Set(orderedViewCols.map(c => c.id));
+  let k = 0;
+  state.columns = state.columns.map(c => (viewIds.has(c.id) ? orderedViewCols[k++] : c));
+}
+
+// Move one column within the current view: "first" | "last" | -1 | +1
+function moveColumnInView(col, where) {
+  const view = getVisibleSortedColumns();
+  const from = view.indexOf(col);
+  if (from === -1) return;
+  let to;
+  if (where === "first") to = 0;
+  else if (where === "last") to = view.length - 1;
+  else to = Math.max(0, Math.min(view.length - 1, from + where));
+  if (to === from) return;
+  view.splice(from, 1);
+  view.splice(to, 0, col);
+  applyViewOrder(view);
+  saveStateToStorage();
+  renderAll();
+  autoGenerate();
+  flashColumnCard(col.id);
+  const label = col.title.trim() || "此欄位";
+  showToast(to === 0 ? `⏫ 「${label}」已移到最前面` : `「${label}」已移到第 ${to + 1} 位`, "success");
+}
+
+function flashColumnCard(colId) {
+  const cardEl = elements.columnsGrid.querySelector(`[data-id="${colId}"]`);
+  if (!cardEl) return;
+  cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  cardEl.classList.add("highlight-flash");
+  setTimeout(() => cardEl.classList.remove("highlight-flash"), 1500);
+}
+
+// One-off: sort columns by each category's weight (from the 分類排序 panel).
+// Uncategorized columns keep weight 0; ties keep their current order.
+async function sortColumnsByCategoryWeight() {
+  const confirmed = await showCustomConfirm(
+    "依分類重新排序",
+    "會依照上面每個分類的數字（大的排前面）重新排列所有欄位，並直接影響生成順序。\n沒有分類的欄位排在最後，同分類的欄位維持原本的先後。確定要排序嗎？"
+  );
+  if (!confirmed) return false;
+  state.columns = state.columns
+    .map((col, i) => ({ col, i, w: col.category ? getDefaultPriorityForCategory(col.category) : -Infinity }))
+    .sort((a, b) => b.w - a.w || a.i - b.i)
+    .map(x => x.col);
+  saveStateToStorage();
+  renderAll();
+  autoGenerate();
+  showToast("已依分類重新排序", "success");
+  return true;
 }
 
 // Compute the final order after dropping the dragged group next to dropTarget,
@@ -2102,13 +2514,109 @@ function finalizeGroupDrop() {
   const insertIdx = dropTarget.position === "before" ? targetIdx : targetIdx + 1;
 
   remaining.splice(insertIdx, 0, ...groupCols);
-  reassignPriorityFromOrder(remaining);
+  applyViewOrder(remaining);
 
   saveStateToStorage();
   dragGroupIds = null;
   dropTarget = null;
   renderAll();
   autoGenerate();
+}
+
+function isDropBefore(cardEl, x, y) {
+  const gridCols = getComputedStyle(elements.columnsGrid).gridTemplateColumns.split(" ").filter(Boolean).length;
+  const r = cardEl.getBoundingClientRect();
+  return gridCols <= 1 ? y < r.top + r.height / 2 : x < r.left + r.width / 2;
+}
+
+function clearDropIndicators() {
+  elements.columnsGrid.querySelectorAll(".drop-indicator-before, .drop-indicator-after")
+    .forEach(el => el.classList.remove("drop-indicator-before", "drop-indicator-after"));
+}
+
+// Touch/pen drag for column cards: press the ⠿ handle and move.
+// Mirrors the native drag & drop path (same dragGroupIds / dropTarget / finalizeGroupDrop).
+function startPointerDrag(e, col, handle) {
+  e.preventDefault();
+  const ids = (selectedColumnIds.has(col.id) && selectedColumnIds.size > 1)
+    ? Array.from(selectedColumnIds)
+    : [col.id];
+  dragGroupIds = ids;
+  dropTarget = null;
+  ids.forEach(id => {
+    const el = elements.columnsGrid.querySelector(`[data-id="${id}"]`);
+    if (el) el.classList.add("dragging");
+  });
+
+  const ghost = document.createElement("div");
+  ghost.className = "touch-drag-ghost";
+  ghost.textContent = ids.length > 1 ? `移動 ${ids.length} 個欄位` : `⠿ ${col.title.trim() || "此欄位"}`;
+  document.body.appendChild(ghost);
+
+  let lastX = e.clientX;
+  let lastY = e.clientY;
+  let scrollSpeed = 0;
+  let rafId = null;
+
+  const updateTarget = () => {
+    ghost.style.transform = `translate(${lastX + 12}px, ${lastY - 28}px)`;
+    const under = document.elementFromPoint(lastX, lastY);
+    const cardEl = under && under.closest("#columnsGrid .col-card");
+    clearDropIndicators();
+    dropTarget = null;
+    if (!cardEl) return;
+    const targetId = Number(cardEl.dataset.id);
+    if (ids.includes(targetId)) return;
+    const before = isDropBefore(cardEl, lastX, lastY);
+    dropTarget = { colId: targetId, position: before ? "before" : "after" };
+    cardEl.classList.add(before ? "drop-indicator-before" : "drop-indicator-after");
+  };
+
+  // Auto-scroll near the top / bottom (above the action dock)
+  const dock = document.getElementById("actionDock");
+  const dockTop = dock ? dock.getBoundingClientRect().top : window.innerHeight;
+  const tick = () => {
+    if (scrollSpeed !== 0) {
+      window.scrollBy(0, scrollSpeed);
+      updateTarget();
+    }
+    rafId = requestAnimationFrame(tick);
+  };
+
+  const onMove = (ev) => {
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+    const edge = 70;
+    if (lastY < edge) scrollSpeed = -Math.ceil((edge - lastY) / 5);
+    else if (lastY > dockTop - edge) scrollSpeed = Math.ceil((lastY - (dockTop - edge)) / 5);
+    else scrollSpeed = 0;
+    updateTarget();
+  };
+
+  const finish = (commit) => {
+    cancelAnimationFrame(rafId);
+    handle.removeEventListener("pointermove", onMove);
+    handle.removeEventListener("pointerup", onUp);
+    handle.removeEventListener("pointercancel", onCancel);
+    ghost.remove();
+    elements.columnsGrid.querySelectorAll(".dragging").forEach(el => el.classList.remove("dragging"));
+    clearDropIndicators();
+    if (commit && dropTarget) {
+      finalizeGroupDrop();
+    } else {
+      dragGroupIds = null;
+      dropTarget = null;
+    }
+  };
+  const onUp = () => finish(true);
+  const onCancel = () => finish(false);
+
+  try { handle.setPointerCapture(e.pointerId); } catch (_) { /* element may be detached */ }
+  handle.addEventListener("pointermove", onMove);
+  handle.addEventListener("pointerup", onUp);
+  handle.addEventListener("pointercancel", onCancel);
+  updateTarget();
+  rafId = requestAnimationFrame(tick);
 }
 
 // Update the "N selected" badge + clear-selection button visibility
@@ -2307,6 +2815,12 @@ function bindGlobalEvents() {
   if (elements.btnAddPresetCategory) {
     elements.btnAddPresetCategory.addEventListener("click", addNewPresetCategory);
   }
+  const btnSortByCategory = document.getElementById("btnSortByCategory");
+  if (btnSortByCategory) {
+    btnSortByCategory.addEventListener("click", async () => {
+      if (await sortColumnsByCategoryWeight()) closeCategoryDefaultsModal();
+    });
+  }
   if (elements.categoryDefaultsModal) {
     elements.categoryDefaultsModal.addEventListener("click", (e) => {
       if (e.target === elements.categoryDefaultsModal) closeCategoryDefaultsModal();
@@ -2352,6 +2866,15 @@ function bindGlobalEvents() {
   if (elements.btnAutoLinkByTitle) {
     elements.btnAutoLinkByTitle.addEventListener("click", autoLinkColumnsByTitle);
   }
+  bindDropdownMenu(document.getElementById("btnLibraryMenu"), document.getElementById("libraryMenu"));
+  document.getElementById("btnBuildLibrary").addEventListener("click", buildLibraryFromPresets);
+  document.getElementById("btnAddLibraryItem").addEventListener("click", addNewLibraryItem);
+  document.getElementById("wizardConfirmBtn").addEventListener("click", confirmWizard);
+  document.getElementById("wizardCancelBtn").addEventListener("click", closeWizard);
+  document.getElementById("wizardCloseX").addEventListener("click", closeWizard);
+  document.getElementById("wizardModal").addEventListener("click", (e) => {
+    if (e.target.id === "wizardModal") closeWizard();
+  });
 
   // Batch Add From Library modal
   if (elements.btnBatchAddFromLibrary) {
@@ -2483,6 +3006,7 @@ function bindGlobalEvents() {
 
 function renderAll() {
   state.columns.forEach(ensureColumnDefaults);
+  if (normalizeColumnOrder()) saveStateToStorage();
   renderCategoryTabs();
   renderColumnTitleDatalist();
   renderColumnsGrid();
@@ -2815,8 +3339,7 @@ function renderColumnsGrid() {
       elements.columnsGrid.querySelectorAll(".drop-indicator-before, .drop-indicator-after")
         .forEach(el => el.classList.remove("drop-indicator-before", "drop-indicator-after"));
       
-      const rect = card.getBoundingClientRect();
-      const isBefore = (e.clientX - rect.left) < rect.width / 2;
+      const isBefore = isDropBefore(card, e.clientX, e.clientY);
       dropTarget = { colId: col.id, position: isBefore ? "before" : "after" };
       card.classList.add(isBefore ? "drop-indicator-before" : "drop-indicator-after");
     });
@@ -2872,17 +3395,21 @@ function renderColumnsGrid() {
     dragHandle.addEventListener("mouseup", () => {
       card.setAttribute("draggable", "false");
     });
+    dragHandle.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse") return; // mouse uses native drag & drop
+      startPointerDrag(e, col, dragHandle);
+    });
     
     const idxBadge = document.createElement("div");
     idxBadge.className = "col-idx-badge";
     idxBadge.textContent = index + 1;
-    idxBadge.title = `點擊輸入目標順位快速移動（目前第 ${index + 1} 位，依優先權排序）`;
+    idxBadge.title = `第 ${index + 1} 位（生成時也排第 ${index + 1}）。點一下輸入要移到第幾位`;
     idxBadge.addEventListener("click", async () => {
       const total = visibleColumns.length;
       const currentPos = visibleColumns.indexOf(col) + 1;
       const newPosStr = await showCustomPrompt(
         "調整顯示順位",
-        `目前順位：第 ${currentPos} 位「${col.title || '未命名'}」\n請輸入目標順位（1–${total}），數字越前面代表優先權越高：`,
+        `目前順位：第 ${currentPos} 位「${col.title || '未命名'}」\n請輸入要移到第幾位（1–${total}）。排越前面，生成時越早出現：`,
         String(currentPos)
       );
       if (newPosStr === null || newPosStr.trim() === "") return;
@@ -2894,7 +3421,7 @@ function renderColumnsGrid() {
       const reordered = visibleColumns.slice();
       const [moved] = reordered.splice(currentPos - 1, 1);
       reordered.splice(newPos - 1, 0, moved);
-      reassignPriorityFromOrder(reordered);
+      applyViewOrder(reordered);
       saveStateToStorage();
       renderAll();
       autoGenerate();
@@ -2923,8 +3450,7 @@ function renderColumnsGrid() {
         `素材庫裡已經有「${finalTitle}」這個項目（${lineCount} 行），要直接連結使用嗎？\n選「取消」的話，這個欄位會維持你自己輸入的內容，不受影響。`
       );
       if (!confirmed) return;
-      col.linkedBlockId = matchingBlock.id;
-      col.content = "";
+      linkColumnToBlock(col, matchingBlock);
       saveStateToStorage();
       renderAll();
       autoGenerate();
@@ -3034,46 +3560,12 @@ function renderColumnsGrid() {
         col.category = val;
       }
 
-      // If priority was never manually touched (still at the untouched
-      // default of 0), auto-fill it based on the newly chosen category.
-      // Manually-set priorities (including a deliberate 0) are left alone.
-      if (col.priority === 0 && col.category) {
-        col.priority = getDefaultPriorityForCategory(col.category);
-      }
       saveStateToStorage();
       renderAll();
       autoGenerate();
     });
-
-    const priorityWrap = document.createElement("div");
-    priorityWrap.className = "col-priority-wrap";
-    priorityWrap.title = "優先權數字越大，在頁籤中排越前面";
-
-    const priorityLabel = document.createElement("label");
-    priorityLabel.className = "col-priority-label";
-    priorityLabel.textContent = "優先";
-    priorityLabel.htmlFor = `priority-${col.id}`;
-
-    const priorityInput = document.createElement("input");
-    priorityInput.className = "col-priority-input";
-    priorityInput.id = `priority-${col.id}`;
-    priorityInput.type = "number";
-    priorityInput.value = col.priority || 0;
-    priorityInput.addEventListener("input", (e) => {
-      const val = parseInt(e.target.value);
-      col.priority = isNaN(val) ? 0 : val;
-      saveStateToStorage();
-    });
-    priorityInput.addEventListener("change", () => {
-      renderAll();
-      autoGenerate();
-    });
-
-    priorityWrap.appendChild(priorityLabel);
-    priorityWrap.appendChild(priorityInput);
 
     metaRow.appendChild(categoryInput);
-    metaRow.appendChild(priorityWrap);
     metaRow.appendChild(toggleLabel);
     header.appendChild(metaRow);
     
@@ -3276,7 +3768,7 @@ function renderColumnsGrid() {
 
     const linkBadge = document.createElement("span");
     linkBadge.className = "col-library-badge";
-    linkBadge.textContent = "🔗 已連結素材庫";
+    linkBadge.textContent = isColumnLinked(col) ? `🔗 素材庫：${library[col.linkedBlockId].title}` : "🔗 已連結素材庫";
     linkBadge.title = "此欄位內容來自共用素材庫，編輯內容會同步影響所有使用此素材的欄位";
 
     const unlinkColumn = async () => {
@@ -3285,7 +3777,15 @@ function renderColumnsGrid() {
         `確定要把「${col.title || '此欄位'}」解除素材庫連結嗎？\n目前的內容會保留在這個欄位自己身上，但之後素材庫更新就不會再同步過來。`
       );
       if (!confirmed) return;
-      const finalContent = getColumnEffectiveContent(col);
+      let finalContent = getColumnEffectiveContent(col);
+      const backup = normalizeContent(col.content);
+      if (backup && backup !== normalizeContent(finalContent)) {
+        const restore = await showCustomConfirm(
+          "要還原連結前的內容嗎？",
+          `這一欄在連結素材庫之前有自己的內容（${countLines(col.content)} 行），跟素材庫目前的版本（${countLines(finalContent)} 行）不同。\n「確認」＝還原成連結前的內容；「取消」＝保留素材庫目前的版本。`
+        );
+        if (restore) finalContent = col.content;
+      }
       col.linkedBlockId = null;
       col.content = finalContent;
       saveStateToStorage();
@@ -3320,10 +3820,26 @@ function renderColumnsGrid() {
 
     // Items for this card's "⋯" menu (built on open so paste reflects the clipboard)
     const buildCardMenuItems = () => {
-      const items = [
+      const view = getVisibleSortedColumns();
+      const viewPos = view.indexOf(col);
+      const items = [];
+      if (viewPos > 0) {
+        items.push({
+          label: "⏫ 移到最前面",
+          hint: activeCategoryTab === "__all__" ? "生成時第一個出現" : `移到「${activeCategoryTab}」分類的最前面`,
+          onClick: () => moveColumnInView(col, "first")
+        });
+        items.push({ label: "⬆️ 上移一格", onClick: () => moveColumnInView(col, -1) });
+      }
+      if (viewPos < view.length - 1) {
+        items.push({ label: "⬇️ 下移一格", onClick: () => moveColumnInView(col, 1) });
+        items.push({ label: "⏬ 移到最後", onClick: () => moveColumnInView(col, "last") });
+      }
+      if (items.length) items.push({ divider: "" });
+      items.push(
         { label: "📋 複製此欄位", hint: "標題＋內容，之後可在任一欄後方貼上", onClick: () => copyColumn(col) },
         { label: "✂️ 剪下此欄位", hint: "複製後清空這一欄", onClick: () => cutColumn(col) }
-      ];
+      );
       if (getClipboard()) {
         items.push({ label: "📥 在後方貼上欄位", onClick: () => pasteColumnAfter(state.columns.indexOf(col)) });
       }
@@ -3595,7 +4111,7 @@ function setColCount(count) {
         active: true,
         lockedValue: null,
         category: newCategory,
-        priority: getDefaultPriorityForCategory(newCategory)
+        priority: 0
       });
     }
   } else if (state.columns.length > target) {
@@ -3720,7 +4236,7 @@ function pasteColumnAfter(index) {
     noRepeat: false,
     usedValues: [],
     category: clip.category || "",
-    priority: clip.priority || 0
+    priority: 0
   };
   state.columns.splice(index + 1, 0, newCol);
   state.columnCount = state.columns.length;
@@ -3853,7 +4369,7 @@ function insertColumnAfter(index) {
     active: true,
     lockedValue: null,
     category: newCategory,
-    priority: getDefaultPriorityForCategory(newCategory)
+    priority: 0
   };
   state.columns.splice(index + 1, 0, newCol);
   state.columnCount = state.columns.length;
@@ -4084,12 +4600,13 @@ function generatePrompt(shouldAnimate = true) {
   const generatedPrompts = [];
   const selectionsList = [];
   const resetNoticeShownFor = new Set(); // avoid spamming the same "cycled" toast within one batch
+  let firstOrderParts = [];              // what goes where in the first prompt, for the order strip
 
   for (let i = 0; i < genCount; i++) {
     let activeSegments = []; // array of { colIndex, originalIdx, label, pickText }
     
     // 1. Gather choices from active columns (in priority order, matching the UI)
-    getAllColumnsSortedByPriority().forEach((col) => {
+    state.columns.forEach((col) => {
       const idx = state.columns.indexOf(col);
       if (!col.active) return;
       
@@ -4173,6 +4690,7 @@ function generatePrompt(shouldAnimate = true) {
     let finalPromptList = activeSegments.map(seg => ({
       type: "column",
       originalIdx: seg.originalIdx,
+      label: seg.label,
       text: formatSegment(seg)
     }));
     
@@ -4213,10 +4731,12 @@ function generatePrompt(shouldAnimate = true) {
     
     // Re-assemble the prompt array
     let outputList = [];
+    const orderParts = []; // parallel to outputList: { kind: "col" | "tag", text }
     
     // A. Prepend Beginning tags
     if (beginningTags.length > 0) {
       outputList.push(beginningTags.join(state.settings.useComma ? ", " : "\n"));
+      orderParts.push({ kind: "tag", text: "開頭固定標籤" });
     }
     
     // B. Process columns and relative/middle inserts
@@ -4226,11 +4746,13 @@ function generatePrompt(shouldAnimate = true) {
     finalPromptList.forEach((colItem, idx) => {
       // Insert column item
       outputList.push(colItem.text);
+      orderParts.push({ kind: "col", text: `${colItem.originalIdx} ${colItem.label}`, colId: state.columns[colItem.originalIdx - 1].id });
       
       // Check if relative tags go after this original column index
       if (relativeTags[colItem.originalIdx]) {
         relativeTags[colItem.originalIdx].forEach(tagText => {
           outputList.push(tagText);
+          orderParts.push({ kind: "tag", text: "固定標籤" });
         });
         // Delete from relativeTags so we know it's placed
         delete relativeTags[colItem.originalIdx];
@@ -4239,6 +4761,7 @@ function generatePrompt(shouldAnimate = true) {
       // Check if middle tags insert here
       if (idx + 1 === middlePoint && middleTags.length > 0) {
         outputList.push(middleTags.join(state.settings.useComma ? ", " : "\n"));
+        orderParts.push({ kind: "tag", text: "中間固定標籤" });
       }
     });
     
@@ -4246,23 +4769,27 @@ function generatePrompt(shouldAnimate = true) {
     Object.keys(relativeTags).forEach(colNum => {
       relativeTags[colNum].forEach(tagText => {
         outputList.push(tagText);
+        orderParts.push({ kind: "tag", text: "固定標籤" });
       });
     });
     
     // D. If there are middle tags but no active columns, insert middle tags
     if (activeColCount === 0 && middleTags.length > 0) {
       outputList.push(middleTags.join(state.settings.useComma ? ", " : "\n"));
+      orderParts.push({ kind: "tag", text: "中間固定標籤" });
     }
     
     // E. Append End tags
     if (endTags.length > 0) {
       outputList.push(endTags.join(state.settings.useComma ? ", " : "\n"));
+      orderParts.push({ kind: "tag", text: "結尾固定標籤" });
     }
     
     // Combine all items with selected separator
     const separator = state.settings.useComma ? ", " : "\n";
     const finalPromptText = outputList.join(separator);
     generatedPrompts.push(finalPromptText);
+    if (i === 0) firstOrderParts = orderParts;
   }
 
   // Persist noRepeat usedValues (and lastSelectedValue) updated during this batch
@@ -4322,10 +4849,54 @@ function generatePrompt(shouldAnimate = true) {
     showToast(toastMsg, "info");
   }
 
+  renderOrderStrip(firstOrderParts);
+
   // Update the bottom dock preview
   if (generatedPrompts.length > 0) {
     updateDockPreview(generatedPrompts[0], generatedPrompts.length);
   }
+}
+
+// ---------------------------------
+// Order strip: shows what ends up first in the prompt
+// ---------------------------------
+
+function renderOrderStrip(parts) {
+  const strip = document.getElementById("orderStrip");
+  if (!strip) return;
+  strip.innerHTML = "";
+  if (!parts || parts.length === 0) {
+    strip.hidden = true;
+    return;
+  }
+  strip.hidden = false;
+  const label = document.createElement("span");
+  label.className = "order-strip-label";
+  label.textContent = "生成順序：";
+  strip.appendChild(label);
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      const arrow = document.createElement("span");
+      arrow.className = "order-strip-arrow";
+      arrow.textContent = "→";
+      strip.appendChild(arrow);
+    }
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `order-chip ${part.kind}`;
+    chip.textContent = part.kind === "tag" ? `📌 ${part.text}` : part.text;
+    chip.title = part.kind === "tag" ? "捲動到固定附加標籤（可在那裡改位置）" : "捲動到這個欄位";
+    chip.addEventListener("click", () => {
+      if (part.kind === "col") {
+        activeCategoryTab = "__all__";
+        renderAll();
+        flashColumnCard(part.colId);
+      } else {
+        document.querySelector(".always-tags-section").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+    strip.appendChild(chip);
+  });
 }
 
 // ---------------------------------
