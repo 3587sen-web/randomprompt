@@ -1694,6 +1694,7 @@ async function addNewLibraryItem() {
   const name = await showCustomPrompt("新增素材", "素材名稱（建議跟欄位標題相同，之後就能用「自動連結同名欄位」一次連上）：", "");
   if (name === null || name.trim() === "") return;
   const id = createLibraryBlock(name.trim(), "", "");
+  libraryManagerMode = "browse";
   elements.libraryManagerSearch.value = name.trim();
   renderLibraryManagerList(name.trim());
   const row = elements.libraryManagerList.querySelector(`[data-block-id="${id}"] .library-manager-row-header`);
@@ -1979,9 +1980,78 @@ function renderLibraryPickerList(query) {
 // ---------------------------------
 // Library Manager (browse / rename / edit / delete all library items)
 // ---------------------------------
+// Library manager view state survives re-renders while the panel stays open
+let libraryManagerExpanded = null;   // Set of open category groups (null = decide on first render)
+let libraryManagerMode = "browse";   // "browse" | "sort" (整理未分類)
+let librarySortQueue = [];           // block ids shown in sort mode (fixed while sorting)
+
+function resetLibraryManagerView() {
+  libraryManagerExpanded = null;
+  libraryManagerMode = "browse";
+  librarySortQueue = [];
+}
+
+// Guess a category for a library item from the columns that use it (or share its title)
+function buildCategorySuggester() {
+  const byBlock = {};  // blockId -> { cat: count }
+  const byTitle = {};  // normalized title -> { cat: count }
+  const add = (map, key, cat) => {
+    if (!key || !cat) return;
+    map[key] = map[key] || {};
+    map[key][cat] = (map[key][cat] || 0) + 1;
+  };
+  const scan = (col) => {
+    const cat = col.category || "";
+    if (col.linkedBlockId) add(byBlock, col.linkedBlockId, cat);
+    add(byTitle, normalizeTitle(col.title), cat);
+  };
+  state.columns.forEach(scan);
+  Object.values(getPresetsFromStorage()).forEach(p => getPresetColumns(p).forEach(scan));
+  const best = (counts) => {
+    if (!counts) return "";
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  };
+  return (block) => best(byBlock[block.id]) || best(byTitle[normalizeTitle(block.title)]);
+}
+
+// Change a library item's category without rebuilding the list, so the
+// panel keeps its open groups and scroll position. Returns false if cancelled.
+async function changeLibraryItemCategory(block, value, selectEl) {
+  let newCat = value;
+  if (value === "__new__") {
+    const name = await showCustomPrompt("新增分類", "請輸入新的分類名稱：", "");
+    if (name === null || name.trim() === "") {
+      selectEl.value = block.category || "";
+      return false;
+    }
+    newCat = name.trim();
+  }
+  block.category = newCat;
+  saveLibraryToStorage();
+  renderAll(); // category tabs / dropdowns on the main page
+  // A brand-new category must show up in every other item's dropdown right away
+  elements.libraryManagerList.querySelectorAll("select.library-manager-cat-select").forEach(sel => {
+    if (newCat && ![...sel.options].some(o => o.value === newCat)) {
+      const opt = document.createElement("option");
+      opt.value = newCat;
+      opt.textContent = newCat;
+      sel.insertBefore(opt, sel.querySelector('option[value="__new__"]'));
+    }
+  });
+  selectEl.value = newCat;
+  return true;
+}
+
 function renderLibraryManagerList(query) {
   if (!elements.libraryManagerList) return;
+  const keepScroll = elements.libraryManagerList.scrollTop;
+  if (libraryManagerMode === "sort") {
+    renderLibrarySorter(query);
+    elements.libraryManagerList.scrollTop = keepScroll;
+    return;
+  }
   elements.libraryManagerList.innerHTML = "";
+  requestAnimationFrame(() => { elements.libraryManagerList.scrollTop = keepScroll; });
 
   const q = (query || "").trim().toLowerCase();
   const items = Object.values(library)
@@ -2014,9 +2084,34 @@ function renderLibraryManagerList(query) {
     groups.get(cat).push(block);
   });
 
+  if (libraryManagerExpanded === null) {
+    // First render after opening: small libraries start fully open
+    libraryManagerExpanded = new Set(items.length <= 30 ? [...groups.keys()] : []);
+  }
+
   const summaryBar = document.createElement("div");
   summaryBar.className = "library-manager-summary";
-  summaryBar.textContent = `共 ${items.length} 個素材庫項目，分為 ${groups.size} 個分類`;
+  const summaryText = document.createElement("span");
+  summaryText.textContent = `共 ${items.length} 個素材庫項目，分為 ${groups.size} 個分類`;
+  summaryBar.appendChild(summaryText);
+  const uncategorizedCount = Object.values(library).filter(b => !b.category).length;
+  if (uncategorizedCount > 0) {
+    const sortBtn = document.createElement("button");
+    sortBtn.type = "button";
+    sortBtn.className = "btn btn-primary btn-sm";
+    sortBtn.textContent = `🗂️ 整理未分類（${uncategorizedCount}）`;
+    sortBtn.title = "只列出未分類的素材，附內容預覽和建議分類，可一次勾選多個批次歸類";
+    sortBtn.addEventListener("click", () => {
+      libraryManagerMode = "sort";
+      librarySortQueue = Object.values(library)
+        .filter(b => !b.category)
+        .sort((a, b) => a.title.localeCompare(b.title, "zh-Hant"))
+        .map(b => b.id);
+      elements.libraryManagerList.scrollTop = 0;
+      renderLibraryManagerList(elements.libraryManagerSearch.value);
+    });
+    summaryBar.appendChild(sortBtn);
+  }
   elements.libraryManagerList.appendChild(summaryBar);
 
   // Sort groups by item count (largest first) for easier scanning
@@ -2039,8 +2134,9 @@ function renderLibraryManagerList(query) {
     groupBody.className = "library-manager-group-body";
     groupBody.style.display = "none";
 
-    // Auto-expand groups when actively searching, so matches are visible
-    if (q || items.length <= 30) {
+    // Open if searching, or if the user had it open before this re-render
+    groupHeader.dataset.cat = catName;
+    if (q || libraryManagerExpanded.has(catName)) {
       groupBody.style.display = "flex";
       groupHeader.classList.add("expanded");
     }
@@ -2049,6 +2145,8 @@ function renderLibraryManagerList(query) {
       const isOpen = groupBody.style.display !== "none";
       groupBody.style.display = isOpen ? "none" : "flex";
       groupHeader.classList.toggle("expanded", !isOpen);
+      if (isOpen) libraryManagerExpanded.delete(catName);
+      else libraryManagerExpanded.add(catName);
     });
 
     groupHeaderRow.appendChild(groupHeader);
@@ -2108,6 +2206,208 @@ function renderLibraryManagerList(query) {
   });
 }
 
+// 整理未分類: a flat queue of the items that were uncategorized when sorting
+// started. Each row shows a content preview, a one-click suggested category
+// and a dropdown; rows stay put after being sorted (marked ✓) so nothing
+// shifts under the cursor. Checkboxes + a bulk bar classify many at once.
+function renderLibrarySorter(query) {
+  const list = elements.libraryManagerList;
+  list.innerHTML = "";
+  const q = (query || "").trim().toLowerCase();
+  const suggest = buildCategorySuggester();
+  const usage = getLibraryUsage();
+  const blocks = librarySortQueue
+    .map(id => library[id])
+    .filter(Boolean)
+    .filter(b => !q || b.title.toLowerCase().includes(q) || (b.content || "").toLowerCase().includes(q));
+  const remaining = () => librarySortQueue.filter(id => library[id] && !library[id].category).length;
+
+  // Top bar: back, progress, bulk actions
+  const bar = document.createElement("div");
+  bar.className = "library-sort-bar";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "btn btn-secondary btn-sm";
+  back.textContent = "← 返回素材庫";
+  back.addEventListener("click", () => {
+    libraryManagerMode = "browse";
+    list.scrollTop = 0;
+    renderLibraryManagerList(elements.libraryManagerSearch.value);
+  });
+  const progress = document.createElement("span");
+  progress.className = "library-sort-progress";
+  const updateProgress = () => {
+    const left = remaining();
+    progress.textContent = left === 0
+      ? `🎉 全部整理完了（${librarySortQueue.length} 個）`
+      : `還有 ${left} 個未分類／共 ${librarySortQueue.length} 個`;
+  };
+  updateProgress();
+
+  const bulk = document.createElement("div");
+  bulk.className = "library-sort-bulk";
+  const selectAll = document.createElement("input");
+  selectAll.type = "checkbox";
+  selectAll.title = "勾選所有還沒分類的項目（已整理好的不會被選到）";
+  const selectAllLabel = document.createElement("label");
+  selectAllLabel.className = "library-sort-selectall";
+  selectAllLabel.append(selectAll, document.createTextNode("全選未分類"));
+  const bulkSelect = document.createElement("select");
+  bulkSelect.className = "library-manager-cat-select";
+  const fillBulkOptions = () => {
+    bulkSelect.innerHTML = "";
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = "勾選的設為…";
+    bulkSelect.appendChild(ph);
+    getLibraryCategoryOptions().forEach(cat => {
+      const o = document.createElement("option");
+      o.value = cat;
+      o.textContent = cat;
+      bulkSelect.appendChild(o);
+    });
+    const n = document.createElement("option");
+    n.value = "__new__";
+    n.textContent = "＋ 新增分類...";
+    bulkSelect.appendChild(n);
+  };
+  fillBulkOptions();
+  bulk.append(selectAllLabel, bulkSelect);
+  bar.append(back, progress, bulk);
+  list.appendChild(bar);
+
+  if (blocks.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "category-defaults-empty";
+    empty.textContent = q ? "沒有符合關鍵字的未分類素材" : "沒有未分類的素材了";
+    list.appendChild(empty);
+    return;
+  }
+
+  const rowControls = []; // { block, checkbox, setDone }
+  const refreshAllDropdowns = () => {
+    fillBulkOptions();
+    rowControls.forEach(rc => rc.refreshOptions());
+  };
+
+  const assign = async (block, value, selectEl, rc) => {
+    const changed = await changeLibraryItemCategory(block, value, selectEl);
+    if (!changed) return;
+    rc.setDone();
+    if (value === "__new__") refreshAllDropdowns();
+    updateProgress();
+  };
+
+  blocks.forEach(block => {
+    const row = document.createElement("div");
+    row.className = "library-sort-row" + (block.category ? " done" : "");
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "library-sort-check";
+
+    const main = document.createElement("div");
+    main.className = "library-sort-main";
+    const title = document.createElement("div");
+    title.className = "library-sort-title";
+    title.textContent = block.title;
+    const meta = document.createElement("span");
+    meta.className = "library-manager-meta";
+    meta.textContent = `${countLines(block.content)} 行・${describeUsage(usage[block.id])}`;
+    title.appendChild(meta);
+    const preview = document.createElement("div");
+    preview.className = "library-sort-preview";
+    preview.textContent = normalizeContent(block.content).split("\n").slice(0, 6).join("、") || "（空的）";
+    preview.title = normalizeContent(block.content).split("\n").slice(0, 30).join("\n");
+    main.append(title, preview);
+
+    const actions = document.createElement("div");
+    actions.className = "library-sort-actions";
+    const suggestion = suggest(block);
+    const sel = document.createElement("select");
+    sel.className = "library-manager-cat-select";
+    const status = document.createElement("span");
+    status.className = "library-sort-status";
+
+    const rc = {
+      block,
+      checkbox: cb,
+      refreshOptions: () => {
+        const current = block.category || "";
+        sel.innerHTML = "";
+        const none = document.createElement("option");
+        none.value = "";
+        none.textContent = "🗂️ 選擇分類…";
+        sel.appendChild(none);
+        getLibraryCategoryOptions().forEach(cat => {
+          const o = document.createElement("option");
+          o.value = cat;
+          o.textContent = cat;
+          sel.appendChild(o);
+        });
+        const n = document.createElement("option");
+        n.value = "__new__";
+        n.textContent = "＋ 新增分類...";
+        sel.appendChild(n);
+        sel.value = current;
+      },
+      setDone: () => {
+        row.classList.toggle("done", !!block.category);
+        status.textContent = block.category ? `✓ ${block.category}` : "";
+        cb.checked = false;
+      }
+    };
+    rc.refreshOptions();
+    rc.setDone();
+    rowControls.push(rc);
+
+    if (suggestion) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "library-suggest-chip";
+      chip.textContent = `建議：${suggestion}`;
+      chip.title = "依照使用這個素材（或同名）的欄位分類推測，點一下直接套用";
+      chip.addEventListener("click", () => assign(block, suggestion, sel, rc));
+      actions.appendChild(chip);
+    }
+    sel.addEventListener("change", () => assign(block, sel.value, sel, rc));
+    actions.append(sel, status);
+
+    row.append(cb, main, actions);
+    list.appendChild(row);
+  });
+
+  // Only items still waiting to be sorted — never re-select finished ones
+  selectAll.addEventListener("change", () => {
+    rowControls.forEach(rc => { rc.checkbox.checked = selectAll.checked && !rc.block.category; });
+  });
+  bulkSelect.addEventListener("change", async () => {
+    const value = bulkSelect.value;
+    if (!value) return;
+    const targets = rowControls.filter(rc => rc.checkbox.checked);
+    if (targets.length === 0) {
+      showToast("先勾選要批次歸類的素材", "error");
+      bulkSelect.value = "";
+      return;
+    }
+    let cat = value;
+    if (value === "__new__") {
+      const name = await showCustomPrompt("新增分類", "請輸入新的分類名稱：", "");
+      if (name === null || name.trim() === "") { bulkSelect.value = ""; return; }
+      cat = name.trim();
+    }
+    targets.forEach(rc => { rc.block.category = cat; });
+    saveLibraryToStorage();
+    renderAll();
+    refreshAllDropdowns();
+    targets.forEach(rc => rc.setDone());
+    selectAll.checked = false;
+    bulkSelect.value = "";
+    updateProgress();
+    showToast(`已把 ${targets.length} 個素材歸類到「${cat}」`, "success");
+  });
+}
+
 // Renders a single collapsed-by-default library item row. The textarea is
 // only created once the row is expanded, so browsing a 250+ item library
 // doesn't mean rendering 250+ live <textarea> elements (some with 1000+
@@ -2149,7 +2449,7 @@ function renderLibraryManagerRow(block, usage) {
     noneOpt.textContent = "🗂️ 未分類";
     categorySelect.appendChild(noneOpt);
 
-    getCategoryDropdownOptions().forEach(cat => {
+    getLibraryCategoryOptions().forEach(cat => {
       const opt = document.createElement("option");
       opt.value = cat;
       opt.textContent = cat;
@@ -2166,24 +2466,44 @@ function renderLibraryManagerRow(block, usage) {
   buildCategoryOptions();
 
   categorySelect.addEventListener("click", (e) => e.stopPropagation());
+  // Stays in place (no re-render, no jump); a note shows where it went, with undo
+  const movedNote = document.createElement("span");
+  movedNote.className = "library-moved-note";
+  movedNote.hidden = true;
+  // Keep the group header count honest without re-rendering the list
+  const bumpGroupCount = (delta) => {
+    const countEl = row.closest(".library-manager-group")?.querySelector(".lmg-count");
+    if (countEl) countEl.textContent = String(Math.max(0, parseInt(countEl.textContent, 10) + delta));
+  };
+  const showMoved = (fromCat) => {
+    if (movedNote.hidden) bumpGroupCount(-1);
+    movedNote.innerHTML = "";
+    movedNote.hidden = false;
+    row.classList.add("moved");
+    const text = document.createElement("span");
+    text.textContent = `✓ 已移到「${block.category || UNCATEGORIZED_LABEL}」`;
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.className = "library-undo-btn";
+    undo.textContent = "復原";
+    undo.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      block.category = fromCat;
+      saveLibraryToStorage();
+      categorySelect.value = fromCat;
+      movedNote.hidden = true;
+      row.classList.remove("moved");
+      bumpGroupCount(1);
+      renderAll();
+    });
+    movedNote.append(text, undo);
+  };
   categorySelect.addEventListener("change", async (e) => {
     e.stopPropagation();
-    const val = e.target.value;
-    if (val === "__new__") {
-      const newCat = await showCustomPrompt("新增分類", "請輸入新的分類名稱：", "");
-      if (newCat === null || newCat.trim() === "") {
-        categorySelect.value = block.category || "";
-        return;
-      }
-      block.category = newCat.trim();
-    } else {
-      block.category = val;
-    }
-    saveLibraryToStorage();
-    // Re-render so the item moves into its new category group
-    renderLibraryManagerList(elements.libraryManagerSearch.value);
-    renderAll();
-    showToast(`已將「${block.title}」歸類到「${block.category || UNCATEGORIZED_LABEL}」`, "success");
+    const fromCat = block.category || "";
+    const changed = await changeLibraryItemCategory(block, e.target.value, categorySelect);
+    if (!changed || (block.category || "") === fromCat) return;
+    showMoved(fromCat);
   });
 
   const renameBtn = document.createElement("button");
@@ -2231,6 +2551,7 @@ function renderLibraryManagerRow(block, usage) {
   headerRow.appendChild(categorySelect);
   headerRow.appendChild(renameBtn);
   headerRow.appendChild(deleteBtn);
+  headerRow.appendChild(movedNote);
 
   const bodyWrap = document.createElement("div");
   bodyWrap.className = "library-manager-row-body";
@@ -2263,7 +2584,7 @@ function renderLibraryManagerRow(block, usage) {
   };
 
   headerRow.addEventListener("click", (e) => {
-    if (e.target === renameBtn || e.target === deleteBtn) return;
+    if (e.target === renameBtn || e.target === deleteBtn || e.target === categorySelect || movedNote.contains(e.target)) return;
     toggleExpand();
   });
 
@@ -2403,6 +2724,17 @@ function getCategoryDropdownOptions() {
   const presets = (state.presetCategories || []).filter(c => c && c.trim() !== "");
   const adHocInUse = getCategoryList().filter(c => c !== "" && !presets.includes(c));
   return [...presets, ...adHocInUse];
+}
+
+// Categories offered for LIBRARY items: everything a column can use, plus any
+// category that so far only exists on library items (so a category created
+// while sorting item #1 is immediately available for item #2).
+function getLibraryCategoryOptions() {
+  const base = getCategoryDropdownOptions();
+  const fromLibrary = Object.values(library)
+    .map(b => b.category || "")
+    .filter(c => c !== "" && !base.includes(c));
+  return [...base, ...[...new Set(fromLibrary)]];
 }
 
 // Columns to display for the active tab, sorted by priority (highest first)
@@ -2859,6 +3191,7 @@ function bindGlobalEvents() {
   if (elements.btnLibraryManager) {
     elements.btnLibraryManager.addEventListener("click", () => {
       elements.libraryManagerSearch.value = "";
+      resetLibraryManagerView();
       renderLibraryManagerList("");
       openOverlayModal(elements.libraryManagerModal);
     });
