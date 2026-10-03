@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261003c">
+  <link rel="stylesheet" href="style.css?v=20261003d">
 </head>
 <body>
 
@@ -154,7 +154,7 @@
       <div class="modal-overlay" id="libraryPickerModal">
         <div class="modal-content glass">
           <div class="modal-header">
-            <h3>選擇要連結的素材庫項目</h3>
+            <h3 id="libraryPickerTitle">選擇要連結的素材庫項目</h3>
             <button class="modal-close" id="libraryPickerCloseX">&times;</button>
           </div>
           <div class="modal-body">
@@ -164,6 +164,7 @@
             </div>
           </div>
           <div class="modal-footer">
+            <button class="btn btn-secondary" id="libraryPickerEditCurrent" hidden></button>
             <button class="btn btn-secondary" id="libraryPickerCloseBtn">取消</button>
           </div>
         </div>
@@ -334,6 +335,6 @@
   <!-- Shared popover for per-column "⋯" menus -->
   <div class="menu-panel card-menu-portal" id="cardMenuPortal" role="menu"></div>
 
-  <script src="app.js?v=20261003c"></script>
+  <script src="app.js?v=20261003d"></script>
 </body>
 </html>
