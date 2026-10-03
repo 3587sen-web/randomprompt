@@ -1279,6 +1279,87 @@ let state = {
 // so editing the library once updates every preset that links to it.
 let library = {}; // { [blockId]: { id, title, category, content, createdAt } }
 
+// Categories managed in the library. Kept as a list so a category can exist
+// before any item is in it (新增分類). Item categories are always included too.
+const LIBRARY_CATEGORIES_KEY = "aura_pg_library_categories";
+let libraryCategories = [];
+
+function loadLibraryCategories() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LIBRARY_CATEGORIES_KEY) || "[]");
+    libraryCategories = Array.isArray(stored) ? stored.filter(c => typeof c === "string" && c.trim()) : [];
+  } catch (e) {
+    libraryCategories = [];
+  }
+}
+
+function saveLibraryCategories() {
+  localStorage.setItem(LIBRARY_CATEGORIES_KEY, JSON.stringify(libraryCategories));
+}
+
+// All library categories: the managed list + any category an item uses
+function getAllLibraryCategories() {
+  const fromItems = Object.values(library).map(b => b.category || "").filter(Boolean);
+  return [...new Set([...libraryCategories, ...fromItems])];
+}
+
+function addLibraryCategory(name) {
+  if (!name || libraryCategories.includes(name)) return;
+  libraryCategories.push(name);
+  saveLibraryCategories();
+}
+
+// A linked column takes its category from its library item ("分類跟著素材庫走").
+// Unlinked columns keep their own. Applies to the screen and, optionally,
+// every saved preset so tabs and exports stay consistent everywhere.
+function syncLinkedColumnCategories(includePresets) {
+  const apply = (col) => {
+    if (col.linkedBlockId && library[col.linkedBlockId]) {
+      const cat = library[col.linkedBlockId].category || "";
+      if ((col.category || "") !== cat) {
+        col.category = cat;
+        return true;
+      }
+    }
+    return false;
+  };
+  let stateChanged = false;
+  state.columns.forEach(c => { if (apply(c)) stateChanged = true; });
+  if (stateChanged) saveStateToStorage();
+  if (includePresets) {
+    const presets = getPresetsFromStorage();
+    let presetsChanged = false;
+    Object.values(presets).forEach(p => getPresetColumns(p).forEach(c => { if (apply(c)) presetsChanged = true; }));
+    if (presetsChanged) savePresetsToStorage(presets);
+  }
+  return stateChanged;
+}
+
+// One-time upgrade: before categories followed the library, columns carried
+// their own category while their library item was often 未分類. Give each such
+// item the category its linked columns use most, so nothing is lost.
+function adoptCategoriesFromLinkedColumns() {
+  const FLAG = "aura_pg_category_follows_library_v1";
+  if (localStorage.getItem(FLAG)) return;
+  const votes = {};
+  const scan = (col) => {
+    if (!col.linkedBlockId || !library[col.linkedBlockId] || !col.category) return;
+    votes[col.linkedBlockId] = votes[col.linkedBlockId] || {};
+    votes[col.linkedBlockId][col.category] = (votes[col.linkedBlockId][col.category] || 0) + 1;
+  };
+  state.columns.forEach(scan);
+  Object.values(getPresetsFromStorage()).forEach(p => getPresetColumns(p).forEach(scan));
+  let changed = false;
+  Object.entries(votes).forEach(([id, counts]) => {
+    if (library[id].category) return;
+    library[id].category = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+    changed = true;
+  });
+  if (changed) saveLibraryToStorage();
+  syncLinkedColumnCategories(true);
+  localStorage.setItem(FLAG, "1");
+}
+
 function saveLibraryToStorage() {
   localStorage.setItem(`${STORAGE_PREFIX}library`, JSON.stringify(library));
 }
@@ -1327,6 +1408,12 @@ function countLines(content) {
 function linkColumnToBlock(col, block) {
   col.content = getColumnEffectiveContent(col);
   col.linkedBlockId = block.id;
+  if (!block.category && col.category) {
+    block.category = col.category; // first link teaches an uncategorized item its category
+    saveLibraryToStorage();
+  } else {
+    col.category = block.category || "";
+  }
 }
 
 // Columns of a stored preset in the current format (older formats are skipped)
@@ -1369,6 +1456,7 @@ function deleteLibraryBlockEverywhere(block) {
     getPresetColumns(preset).forEach(c => {
       if (c.linkedBlockId === block.id) {
         c.content = block.content || "";
+        c.category = block.category || c.category || "";
         c.linkedBlockId = null;
         touched = true;
       }
@@ -1379,6 +1467,7 @@ function deleteLibraryBlockEverywhere(block) {
   state.columns.forEach(c => {
     if (c.linkedBlockId === block.id) {
       c.content = block.content || "";
+      c.category = block.category || c.category || "";
       c.linkedBlockId = null;
     }
   });
@@ -1688,6 +1777,14 @@ function buildLibraryFromPresets() {
       showToast(`🧩 已建立 ${rows.length} 個素材，連結 ${linked} 欄`, "success");
     }
   });
+}
+
+function openLibraryManagerAt(block) {
+  resetLibraryManagerView();
+  elements.libraryManagerSearch.value = block.title;
+  renderLibraryManagerList(block.title);
+  elements.libraryManagerModal.style.display = "flex";
+  setTimeout(() => elements.libraryManagerModal.classList.add("active"), 10);
 }
 
 async function addNewLibraryItem() {
@@ -2027,7 +2124,9 @@ async function changeLibraryItemCategory(block, value, selectEl) {
     newCat = name.trim();
   }
   block.category = newCat;
+  if (newCat) addLibraryCategory(newCat);
   saveLibraryToStorage();
+  syncLinkedColumnCategories(true);
   renderAll(); // category tabs / dropdowns on the main page
   // A brand-new category must show up in every other item's dropdown right away
   elements.libraryManagerList.querySelectorAll("select.library-manager-cat-select").forEach(sel => {
@@ -2058,7 +2157,7 @@ function renderLibraryManagerList(query) {
     .filter(b => !q || b.title.toLowerCase().includes(q) || b.category.toLowerCase().includes(q))
     .sort((a, b) => a.title.localeCompare(b.title, "zh-Hant"));
 
-  if (items.length === 0) {
+  if (items.length === 0 && (q || getAllLibraryCategories().length === 0)) {
     const empty = document.createElement("p");
     empty.className = "category-defaults-empty";
     if (Object.keys(library).length === 0) {
@@ -2078,6 +2177,7 @@ function renderLibraryManagerList(query) {
 
   // Group by category so a large library stays browsable
   const groups = new Map(); // category -> blocks[]
+  if (!q) getAllLibraryCategories().forEach(cat => groups.set(cat, [])); // empty categories show too
   items.forEach(block => {
     const cat = block.category || UNCATEGORIZED_LABEL;
     if (!groups.has(cat)) groups.set(cat, []);
@@ -2114,8 +2214,10 @@ function renderLibraryManagerList(query) {
   }
   elements.libraryManagerList.appendChild(summaryBar);
 
-  // Sort groups by item count (largest first) for easier scanning
-  const sortedGroups = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+  // Sort groups by item count (largest first); 未分類 always last
+  const sortedGroups = [...groups.entries()]
+    .filter(([cat, blocks]) => blocks.length > 0 || cat !== UNCATEGORIZED_LABEL)
+    .sort((a, b) => (a[0] === UNCATEGORIZED_LABEL) - (b[0] === UNCATEGORIZED_LABEL) || b[1].length - a[1].length);
 
   sortedGroups.forEach(([catName, blocks]) => {
     const groupWrap = document.createElement("div");
@@ -2151,49 +2253,26 @@ function renderLibraryManagerList(query) {
 
     groupHeaderRow.appendChild(groupHeader);
 
-    // "未分類" is a pseudo-group (empty category), not a real one to rename/remove
+    // "未分類" is a pseudo-group (empty category), not a real one to rename/copy/delete
     if (catName !== UNCATEGORIZED_LABEL) {
-      const renameGroupBtn = document.createElement("button");
-      renameGroupBtn.type = "button";
-      renameGroupBtn.className = "library-manager-group-icon-btn";
-      renameGroupBtn.textContent = "✏️";
-      renameGroupBtn.title = "重新命名這個分類（只影響素材庫項目的分類）";
-      renameGroupBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const newName = await showCustomPrompt("重新命名分類", `將素材庫的「${catName}」分類重新命名為：`, catName);
-        if (newName === null) return;
-        const trimmed = newName.trim();
-        if (trimmed === "" || trimmed === catName) return;
-        Object.values(library).forEach(b => {
-          if ((b.category || "") === catName) b.category = trimmed;
-        });
-        saveLibraryToStorage();
-        renderLibraryManagerList(elements.libraryManagerSearch.value);
-        showToast(`已將素材庫分類「${catName}」重新命名為「${trimmed}」`, "success");
-      });
-
-      const removeGroupBtn = document.createElement("button");
-      removeGroupBtn.type = "button";
-      removeGroupBtn.className = "library-manager-group-icon-btn danger";
-      removeGroupBtn.textContent = "🗑️";
-      removeGroupBtn.title = "移除這個分類（項目會變成未分類，項目本身不會被刪除）";
-      removeGroupBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const confirmed = await showCustomConfirm(
-          "移除分類",
-          `確定要移除素材庫的「${catName}」分類嗎？\n這個分類底下的 ${blocks.length} 個項目會變成「未分類」，項目本身不會被刪除。`
-        );
-        if (!confirmed) return;
-        Object.values(library).forEach(b => {
-          if ((b.category || "") === catName) b.category = "";
-        });
-        saveLibraryToStorage();
-        renderLibraryManagerList(elements.libraryManagerSearch.value);
-        showToast(`已移除素材庫分類「${catName}」，項目已改為未分類`, "success");
-      });
-
-      groupHeaderRow.appendChild(renameGroupBtn);
-      groupHeaderRow.appendChild(removeGroupBtn);
+      const mkBtn = (icon, title, handler, danger) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "library-manager-group-icon-btn" + (danger ? " danger" : "");
+        btn.textContent = icon;
+        btn.title = title;
+        btn.addEventListener("click", (e) => { e.stopPropagation(); handler(); });
+        groupHeaderRow.appendChild(btn);
+      };
+      mkBtn("✏️", "重新命名這個分類（用到它的欄位會一起改）", () => renameLibraryCategory(catName));
+      mkBtn("📑", "複製這個分類（連同裡面的素材）", () => copyLibraryCategory(catName));
+      mkBtn("🗑️", "刪除這個分類", () => deleteLibraryCategory(catName), true);
+    }
+    if (blocks.length === 0) {
+      const hint = document.createElement("p");
+      hint.className = "library-empty-group-hint";
+      hint.textContent = "這個分類還沒有素材。在素材的分類選單選它，或用「＋ 新增素材」。";
+      groupBody.appendChild(hint);
     }
 
     blocks.forEach(block => {
@@ -2204,6 +2283,126 @@ function renderLibraryManagerList(query) {
     groupWrap.appendChild(groupBody);
     elements.libraryManagerList.appendChild(groupWrap);
   });
+}
+
+// ---- Library category operations ----
+function libraryCategoryExists(name) {
+  return getAllLibraryCategories().includes(name);
+}
+
+async function addLibraryCategoryPrompt() {
+  const name = await showCustomPrompt("新增分類", "請輸入新的分類名稱：", "");
+  if (name === null || name.trim() === "") return;
+  const trimmed = name.trim();
+  if (libraryCategoryExists(trimmed)) {
+    showToast(`「${trimmed}」這個分類已經存在了`, "error");
+    return;
+  }
+  addLibraryCategory(trimmed);
+  if (libraryManagerExpanded) libraryManagerExpanded.add(trimmed);
+  renderLibraryManagerList(elements.libraryManagerSearch.value);
+  renderAll();
+  showToast(`已新增分類「${trimmed}」`, "success");
+}
+
+async function renameLibraryCategory(oldName) {
+  const newName = await showCustomPrompt("重新命名分類", `將「${oldName}」重新命名為：`, oldName);
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (trimmed === "" || trimmed === oldName) return;
+  if (libraryCategoryExists(trimmed)) {
+    showToast(`「${trimmed}」這個分類已經存在了`, "error");
+    return;
+  }
+  Object.values(library).forEach(b => { if ((b.category || "") === oldName) b.category = trimmed; });
+  libraryCategories = libraryCategories.map(c => (c === oldName ? trimmed : c));
+  if (!libraryCategories.includes(trimmed)) libraryCategories.push(trimmed);
+  state.presetCategories = (state.presetCategories || []).map(c => (c === oldName ? trimmed : c));
+  // Unlinked columns using the old name follow too (screen + saved presets)
+  state.columns.forEach(c => { if ((c.category || "") === oldName) c.category = trimmed; });
+  const presets = getPresetsFromStorage();
+  Object.values(presets).forEach(p => getPresetColumns(p).forEach(c => { if ((c.category || "") === oldName) c.category = trimmed; }));
+  savePresetsToStorage(presets);
+  if (activeCategoryTab === oldName) activeCategoryTab = trimmed;
+  if (libraryManagerExpanded && libraryManagerExpanded.delete(oldName)) libraryManagerExpanded.add(trimmed);
+  saveLibraryToStorage();
+  saveLibraryCategories();
+  saveStateToStorage();
+  syncLinkedColumnCategories(true);
+  renderLibraryManagerList(elements.libraryManagerSearch.value);
+  renderAll();
+  showToast(`已將分類「${oldName}」重新命名為「${trimmed}」`, "success");
+}
+
+async function copyLibraryCategory(sourceName) {
+  const blocks = Object.values(library).filter(b => (b.category || "") === sourceName);
+  let suggested = `${sourceName} 副本`;
+  for (let n = 2; libraryCategoryExists(suggested); n++) suggested = `${sourceName} 副本${n}`;
+  const name = await showCustomPrompt(
+    "複製分類",
+    `會建立一個新分類，並把「${sourceName}」裡的 ${blocks.length} 個素材各複製一份放進去（原本的不受影響）。\n新分類名稱：`,
+    suggested
+  );
+  if (name === null || name.trim() === "") return;
+  const trimmed = name.trim();
+  if (libraryCategoryExists(trimmed)) {
+    showToast(`「${trimmed}」這個分類已經存在了`, "error");
+    return;
+  }
+  addLibraryCategory(trimmed);
+  blocks.forEach(b => createLibraryBlock(b.title, trimmed, b.content));
+  if (libraryManagerExpanded) libraryManagerExpanded.add(trimmed);
+  renderLibraryManagerList(elements.libraryManagerSearch.value);
+  renderAll();
+  showToast(`已複製成新分類「${trimmed}」（${blocks.length} 個素材）`, "success");
+}
+
+async function deleteLibraryCategory(name) {
+  const blocks = Object.values(library).filter(b => (b.category || "") === name);
+  const ok = await showCustomConfirm(
+    "刪除分類",
+    blocks.length
+      ? `確定要刪除分類「${name}」嗎？裡面有 ${blocks.length} 個素材，下一步會問你要怎麼處理它們。`
+      : `確定要刪除分類「${name}」嗎？（裡面沒有素材）`,
+    true
+  );
+  if (!ok) return;
+  let deleteItems = false;
+  if (blocks.length) {
+    const usage = getLibraryUsage();
+    const usedIn = new Set();
+    blocks.forEach(b => (usage[b.id]?.presets || []).forEach(p => usedIn.add(p)));
+    deleteItems = await showCustomConfirm(
+      "裡面的素材要一起刪除嗎？",
+      `「確認」＝連同 ${blocks.length} 個素材一起刪除。` +
+        (usedIn.size ? `用到它們的欄位（設定檔：${[...usedIn].join("、")}）會解除連結並保留目前內容，不會變空白。` : "") +
+        `\n「取消」＝只刪除分類，素材保留並移到「未分類」。`,
+      true
+    );
+  }
+  if (deleteItems) {
+    blocks.forEach(b => deleteLibraryBlockEverywhere(b));
+    // the columns keep the deleted item's category on their own; clear this one
+    state.columns.forEach(c => { if (!c.linkedBlockId && c.category === name) c.category = ""; });
+    const presets = getPresetsFromStorage();
+    Object.values(presets).forEach(p => getPresetColumns(p).forEach(c => { if (!c.linkedBlockId && c.category === name) c.category = ""; }));
+    savePresetsToStorage(presets);
+  } else {
+    blocks.forEach(b => { b.category = ""; });
+    saveLibraryToStorage();
+  }
+  libraryCategories = libraryCategories.filter(c => c !== name);
+  state.presetCategories = (state.presetCategories || []).filter(c => c !== name);
+  if (activeCategoryTab === name) activeCategoryTab = "__all__";
+  saveLibraryCategories();
+  saveStateToStorage();
+  syncLinkedColumnCategories(true);
+  renderLibraryManagerList(elements.libraryManagerSearch.value);
+  renderAll();
+  showToast(
+    deleteItems ? `已刪除分類「${name}」和 ${blocks.length} 個素材` : `已刪除分類「${name}」，${blocks.length} 個素材移到未分類`,
+    "success"
+  );
 }
 
 // 整理未分類: a flat queue of the items that were uncategorized when sorting
@@ -2397,7 +2596,9 @@ function renderLibrarySorter(query) {
       cat = name.trim();
     }
     targets.forEach(rc => { rc.block.category = cat; });
+    addLibraryCategory(cat);
     saveLibraryToStorage();
+    syncLinkedColumnCategories(true);
     renderAll();
     refreshAllDropdowns();
     targets.forEach(rc => rc.setDone());
@@ -2490,6 +2691,7 @@ function renderLibraryManagerRow(block, usage) {
       ev.stopPropagation();
       block.category = fromCat;
       saveLibraryToStorage();
+      syncLinkedColumnCategories(true);
       categorySelect.value = fromCat;
       movedNote.hidden = true;
       row.classList.remove("moved");
@@ -2722,19 +2924,18 @@ function getCategoryList() {
 // only — tabs should only appear once a column actually uses that category.
 function getCategoryDropdownOptions() {
   const presets = (state.presetCategories || []).filter(c => c && c.trim() !== "");
-  const adHocInUse = getCategoryList().filter(c => c !== "" && !presets.includes(c));
-  return [...presets, ...adHocInUse];
+  const fromLibrary = getAllLibraryCategories().filter(c => !presets.includes(c));
+  const adHocInUse = getCategoryList().filter(c => c !== "" && !presets.includes(c) && !fromLibrary.includes(c));
+  return [...presets, ...fromLibrary, ...adHocInUse];
 }
 
 // Categories offered for LIBRARY items: everything a column can use, plus any
 // category that so far only exists on library items (so a category created
 // while sorting item #1 is immediately available for item #2).
 function getLibraryCategoryOptions() {
-  const base = getCategoryDropdownOptions();
-  const fromLibrary = Object.values(library)
-    .map(b => b.category || "")
-    .filter(c => c !== "" && !base.includes(c));
-  return [...base, ...[...new Set(fromLibrary)]];
+  // Library categories first, then the rest a column could use
+  const lib = getAllLibraryCategories();
+  return [...lib, ...getCategoryDropdownOptions().filter(c => !lib.includes(c))];
 }
 
 // Columns to display for the active tab, sorted by priority (highest first)
@@ -2794,25 +2995,6 @@ function flashColumnCard(colId) {
   cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
   cardEl.classList.add("highlight-flash");
   setTimeout(() => cardEl.classList.remove("highlight-flash"), 1500);
-}
-
-// One-off: sort columns by each category's weight (from the 分類排序 panel).
-// Uncategorized columns keep weight 0; ties keep their current order.
-async function sortColumnsByCategoryWeight() {
-  const confirmed = await showCustomConfirm(
-    "依分類重新排序",
-    "會依照上面每個分類的數字（大的排前面）重新排列所有欄位，並直接影響生成順序。\n沒有分類的欄位排在最後，同分類的欄位維持原本的先後。確定要排序嗎？"
-  );
-  if (!confirmed) return false;
-  state.columns = state.columns
-    .map((col, i) => ({ col, i, w: col.category ? getDefaultPriorityForCategory(col.category) : -Infinity }))
-    .sort((a, b) => b.w - a.w || a.i - b.i)
-    .map(x => x.col);
-  saveStateToStorage();
-  renderAll();
-  autoGenerate();
-  showToast("已依分類重新排序", "success");
-  return true;
 }
 
 // Compute the final order after dropping the dragged group next to dropTarget,
@@ -2967,7 +3149,9 @@ function updateSelectionBadge() {
 document.addEventListener("DOMContentLoaded", () => {
   initElements();
   loadLibraryFromStorage();
+  loadLibraryCategories();
   loadStateFromStorage();
+  adoptCategoriesFromLinkedColumns();
   bindGlobalEvents();
   
   // Init clipboard body class
@@ -3007,12 +3191,6 @@ function initElements() {
     columnsGrid: document.getElementById("columnsGrid"),
     categoryTabsBar: document.getElementById("categoryTabsBar"),
     columnTitleDatalist: document.getElementById("columnTitleDatalist"),
-    btnCategoryDefaults: document.getElementById("btnCategoryDefaults"),
-    categoryDefaultsModal: document.getElementById("categoryDefaultsModal"),
-    categoryDefaultsList: document.getElementById("categoryDefaultsList"),
-    categoryDefaultsCloseX: document.getElementById("categoryDefaultsCloseX"),
-    categoryDefaultsCloseBtn: document.getElementById("categoryDefaultsCloseBtn"),
-    btnAddPresetCategory: document.getElementById("btnAddPresetCategory"),
     btnLibraryManager: document.getElementById("btnLibraryManager"),
     btnAutoLinkByTitle: document.getElementById("btnAutoLinkByTitle"),
     btnBatchAddFromLibrary: document.getElementById("btnBatchAddFromLibrary"),
@@ -3123,42 +3301,6 @@ function bindGlobalEvents() {
       updateSelectionBadge();
     });
   }
-  if (elements.btnCategoryDefaults) {
-    elements.btnCategoryDefaults.addEventListener("click", () => {
-      renderCategoryDefaultsPanel();
-      elements.categoryDefaultsModal.style.display = "flex";
-      setTimeout(() => {
-        elements.categoryDefaultsModal.classList.add("active");
-      }, 10);
-    });
-  }
-  const closeCategoryDefaultsModal = () => {
-    elements.categoryDefaultsModal.classList.remove("active");
-    setTimeout(() => {
-      elements.categoryDefaultsModal.style.display = "none";
-    }, 250);
-  };
-  if (elements.categoryDefaultsCloseX) {
-    elements.categoryDefaultsCloseX.addEventListener("click", closeCategoryDefaultsModal);
-  }
-  if (elements.categoryDefaultsCloseBtn) {
-    elements.categoryDefaultsCloseBtn.addEventListener("click", closeCategoryDefaultsModal);
-  }
-  if (elements.btnAddPresetCategory) {
-    elements.btnAddPresetCategory.addEventListener("click", addNewPresetCategory);
-  }
-  const btnSortByCategory = document.getElementById("btnSortByCategory");
-  if (btnSortByCategory) {
-    btnSortByCategory.addEventListener("click", async () => {
-      if (await sortColumnsByCategoryWeight()) closeCategoryDefaultsModal();
-    });
-  }
-  if (elements.categoryDefaultsModal) {
-    elements.categoryDefaultsModal.addEventListener("click", (e) => {
-      if (e.target === elements.categoryDefaultsModal) closeCategoryDefaultsModal();
-    });
-  }
-
   // Generic modal open/close (reused by library picker + library manager)
   const openOverlayModal = (modalEl) => {
     modalEl.style.display = "flex";
@@ -3202,6 +3344,7 @@ function bindGlobalEvents() {
   bindDropdownMenu(document.getElementById("btnLibraryMenu"), document.getElementById("libraryMenu"));
   document.getElementById("btnBuildLibrary").addEventListener("click", buildLibraryFromPresets);
   document.getElementById("btnAddLibraryItem").addEventListener("click", addNewLibraryItem);
+  document.getElementById("btnAddLibraryCategory").addEventListener("click", addLibraryCategoryPrompt);
   document.getElementById("wizardConfirmBtn").addEventListener("click", confirmWizard);
   document.getElementById("wizardCancelBtn").addEventListener("click", closeWizard);
   document.getElementById("wizardCloseX").addEventListener("click", closeWizard);
@@ -3339,6 +3482,7 @@ function bindGlobalEvents() {
 
 function renderAll() {
   state.columns.forEach(ensureColumnDefaults);
+  syncLinkedColumnCategories(false);
   if (normalizeColumnOrder()) saveStateToStorage();
   renderCategoryTabs();
   renderColumnTitleDatalist();
@@ -3372,26 +3516,11 @@ function renderColumnTitleDatalist() {
 // in the preset list NOR used by any column — true orphans only. Preset
 // categories keep their custom priority even with zero columns using them
 // right now, since they're meant to be reused as a template later.
-function cleanupOrphanedCategoryDefaults() {
-  if (!state.categoryDefaults) return;
-  const activeCategories = new Set(getCategoryList().filter(c => c !== ""));
-  const presetCategories = new Set(state.presetCategories || []);
-  let changed = false;
-  Object.keys(state.categoryDefaults).forEach(cat => {
-    if (!activeCategories.has(cat) && !presetCategories.has(cat)) {
-      delete state.categoryDefaults[cat];
-      changed = true;
-    }
-  });
-  if (changed) saveStateToStorage();
-}
-
 function renderCategoryTabs() {
   if (!elements.categoryTabsBar) return;
   elements.categoryTabsBar.innerHTML = "";
 
   const categories = getCategoryList();
-  cleanupOrphanedCategoryDefaults();
 
   // If nobody has used categories yet, hide the bar entirely (no clutter)
   if (categories.length <= 1 && categories[0] === "" ) {
@@ -3431,180 +3560,6 @@ function renderCategoryTabs() {
 // Render the "分類預設優先權設定" management panel — lists every category
 // currently in use (real ones only, not "未分類") with an editable default
 // priority. This is also a handy at-a-glance reference of all category names.
-async function renameCategoryEverywhere(oldName) {
-  const newName = await showCustomPrompt("重新命名分類", `將「${oldName}」重新命名為：`, oldName);
-  if (newName === null) return;
-  const trimmed = newName.trim();
-  if (trimmed === "" || trimmed === oldName) return;
-
-  if (getCategoryDropdownOptions().includes(trimmed)) {
-    showToast(`「${trimmed}」這個分類名稱已經存在了`, "error");
-    return;
-  }
-
-  // Update the preset list entry (if it's a preset)
-  const idx = (state.presetCategories || []).indexOf(oldName);
-  if (idx !== -1) state.presetCategories[idx] = trimmed;
-
-  // Cascade the rename to every column currently using this category
-  state.columns.forEach(col => {
-    if ((col.category || "") === oldName) col.category = trimmed;
-  });
-
-  // Carry over any custom priority default to the new name
-  if (state.categoryDefaults && Object.prototype.hasOwnProperty.call(state.categoryDefaults, oldName)) {
-    state.categoryDefaults[trimmed] = state.categoryDefaults[oldName];
-    delete state.categoryDefaults[oldName];
-  }
-
-  if (activeCategoryTab === oldName) activeCategoryTab = trimmed;
-
-  saveStateToStorage();
-  renderAll();
-  renderCategoryDefaultsPanel();
-  showToast(`已將分類「${oldName}」重新命名為「${trimmed}」`, "success");
-}
-
-async function removeCategoryFromPresets(cat) {
-  const inUseCount = state.columns.filter(c => (c.category || "") === cat).length;
-  const warningMsg = inUseCount > 0
-    ? `確定要把「${cat}」從預設分類清單移除嗎？\n目前有 ${inUseCount} 個欄位正在使用這個分類，它們不會被清空，只是這個分類以後不會自動出現在新主題的下拉選單裡。`
-    : `確定要把「${cat}」從預設分類清單移除嗎？`;
-  const confirmed = await showCustomConfirm("移除預設分類", warningMsg);
-  if (!confirmed) return;
-  state.presetCategories = (state.presetCategories || []).filter(c => c !== cat);
-  saveStateToStorage();
-  renderAll();
-  renderCategoryDefaultsPanel();
-  showToast(`已將「${cat}」從預設分類清單移除`, "success");
-}
-
-function addCategoryToPresets(cat) {
-  if (!state.presetCategories) state.presetCategories = [];
-  if (state.presetCategories.includes(cat)) return;
-  state.presetCategories.push(cat);
-  saveStateToStorage();
-  renderAll();
-  renderCategoryDefaultsPanel();
-  showToast(`已將「${cat}」加入預設分類清單`, "success");
-}
-
-async function addNewPresetCategory() {
-  const name = await showCustomPrompt("新增預設分類", "請輸入新的分類名稱，之後在任何主題都能直接從下拉選單選用：", "");
-  if (name === null) return;
-  const trimmed = name.trim();
-  if (trimmed === "") return;
-  if (!state.presetCategories) state.presetCategories = [];
-  if (state.presetCategories.includes(trimmed)) {
-    showToast("這個分類名稱已經在預設清單裡了", "error");
-    return;
-  }
-  state.presetCategories.push(trimmed);
-  saveStateToStorage();
-  renderCategoryDefaultsPanel();
-  showToast(`已新增預設分類「${trimmed}」`, "success");
-}
-
-function renderCategoryDefaultsPanel() {
-  if (!elements.categoryDefaultsList) return;
-  elements.categoryDefaultsList.innerHTML = "";
-
-  const categories = getCategoryDropdownOptions();
-
-  if (categories.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "category-defaults-empty";
-    empty.textContent = "目前還沒有任何分類，點下方「＋ 新增預設分類」開始建立吧。";
-    elements.categoryDefaultsList.appendChild(empty);
-    return;
-  }
-
-  const presetSet = new Set(state.presetCategories || []);
-
-  // Sort by effective priority, highest first, so the list itself mirrors the
-  // actual generation order — easier to sanity-check at a glance.
-  const sorted = categories.slice().sort((a, b) => getDefaultPriorityForCategory(b) - getDefaultPriorityForCategory(a));
-
-  sorted.forEach(cat => {
-    const isPreset = presetSet.has(cat);
-
-    const row = document.createElement("div");
-    row.className = "category-defaults-row";
-
-    const nameEl = document.createElement("span");
-    nameEl.className = "category-defaults-name";
-    nameEl.textContent = cat;
-    if (!isPreset) {
-      const badge = document.createElement("span");
-      badge.className = "category-defaults-adhoc-badge";
-      badge.textContent = "未加入預設";
-      nameEl.appendChild(badge);
-    }
-
-    const countEl = document.createElement("span");
-    countEl.className = "category-defaults-count";
-    const count = state.columns.filter(c => (c.category || "") === cat).length;
-    countEl.textContent = `${count} 個欄位`;
-
-    const isCustom = state.categoryDefaults && Object.prototype.hasOwnProperty.call(state.categoryDefaults, cat);
-
-    const input = document.createElement("input");
-    input.type = "number";
-    input.className = "category-defaults-input";
-    input.value = getDefaultPriorityForCategory(cat);
-    input.title = isCustom ? "已自訂（不會受系統建議值影響）" : "目前為系統建議值";
-    input.addEventListener("change", (e) => {
-      const val = parseInt(e.target.value);
-      setDefaultPriorityForCategory(cat, isNaN(val) ? 0 : val);
-      renderCategoryDefaultsPanel();
-    });
-
-    const resetBtn = document.createElement("button");
-    resetBtn.type = "button";
-    resetBtn.className = "category-defaults-reset";
-    resetBtn.textContent = "還原建議值";
-    resetBtn.disabled = !isCustom;
-    resetBtn.title = isCustom ? "還原成系統建議值" : "目前已經是系統建議值";
-    resetBtn.addEventListener("click", () => {
-      resetDefaultPriorityForCategory(cat);
-      renderCategoryDefaultsPanel();
-    });
-
-    const renameBtn = document.createElement("button");
-    renameBtn.type = "button";
-    renameBtn.className = "category-defaults-icon-btn";
-    renameBtn.textContent = "✏️";
-    renameBtn.title = "重新命名（會一併更新所有正在使用此分類的欄位）";
-    renameBtn.addEventListener("click", () => renameCategoryEverywhere(cat));
-
-    row.appendChild(nameEl);
-    row.appendChild(countEl);
-    row.appendChild(input);
-    row.appendChild(resetBtn);
-    row.appendChild(renameBtn);
-
-    if (isPreset) {
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "category-defaults-icon-btn danger";
-      removeBtn.textContent = "🗑️";
-      removeBtn.title = "從預設分類清單移除";
-      removeBtn.addEventListener("click", () => removeCategoryFromPresets(cat));
-      row.appendChild(removeBtn);
-    } else {
-      const promoteBtn = document.createElement("button");
-      promoteBtn.type = "button";
-      promoteBtn.className = "category-defaults-promote";
-      promoteBtn.textContent = "＋ 加入預設";
-      promoteBtn.title = "把這個分類加入預設清單，之後新主題也能直接選用";
-      promoteBtn.addEventListener("click", () => addCategoryToPresets(cat));
-      row.appendChild(promoteBtn);
-    }
-
-    elements.categoryDefaultsList.appendChild(row);
-  });
-}
-
 function updateHeaderStates() {
   elements.colCountInput.value = state.columnCount;
   elements.genCountInput.value = state.generateCount || 1;
@@ -3898,7 +3853,19 @@ function renderColumnsGrid() {
       autoGenerate();
     });
 
-    metaRow.appendChild(categoryInput);
+    if (isColumnLinked(col)) {
+      // Category comes from the library item — show it, click to change it there
+      const block = library[col.linkedBlockId];
+      const catBtn = document.createElement("button");
+      catBtn.type = "button";
+      catBtn.className = "col-category-linked";
+      catBtn.textContent = `🔗 ${block.category || "未分類"}`;
+      catBtn.title = `分類跟著素材「${block.title}」走。點一下到素材庫修改`;
+      catBtn.addEventListener("click", () => openLibraryManagerAt(block));
+      metaRow.appendChild(catBtn);
+    } else {
+      metaRow.appendChild(categoryInput);
+    }
     metaRow.appendChild(toggleLabel);
     header.appendChild(metaRow);
     
@@ -4752,7 +4719,7 @@ function exportSinglePreset() {
     ...preset,
     columns: (preset.columns || []).map(col => {
       const { linkedBlockId, ...rest } = col;
-      return { ...rest, content: getColumnEffectiveContent(col) };
+      return { ...rest, content: getColumnEffectiveContent(col), category: isColumnLinked(col) ? (library[col.linkedBlockId].category || "") : (col.category || "") };
     })
   };
 
@@ -5856,7 +5823,7 @@ function exportPresetsToFile() {
       ...preset,
       columns: (preset.columns || []).map(col => {
         const { linkedBlockId, ...rest } = col;
-        return { ...rest, content: getColumnEffectiveContent(col) };
+        return { ...rest, content: getColumnEffectiveContent(col), category: isColumnLinked(col) ? (library[col.linkedBlockId].category || "") : (col.category || "") };
       })
     };
   });
@@ -6152,7 +6119,8 @@ function exportPortablePack() {
     _appName:     "Aura Prompt Generator",
     current_state: currentState ? JSON.parse(currentState) : null,
     presets:       presets      ? JSON.parse(presets)      : {},
-    library:       libraryData  ? JSON.parse(libraryData)  : {}
+    library:       libraryData  ? JSON.parse(libraryData)  : {},
+    library_categories: libraryCategories.slice()
   };
   
   const hasState   = !!pack.current_state;
@@ -6293,6 +6261,13 @@ async function importPortablePack(event) {
         saveLibraryToStorage();
       }
       
+      // 3d. 素材庫分類清單
+      if (Array.isArray(pack.library_categories)) {
+        const incoming = pack.library_categories.filter(c => typeof c === "string" && c.trim());
+        libraryCategories = isFullOverwrite ? incoming : [...new Set([...libraryCategories, ...incoming])];
+        saveLibraryCategories();
+      }
+
       // ── 步驟 4：重新整理畫面 ──
       loadLibraryFromStorage();
       loadStateFromStorage();

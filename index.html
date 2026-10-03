@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261003">
+  <link rel="stylesheet" href="style.css?v=20261003b">
 </head>
 <body>
 
@@ -138,7 +138,6 @@
           <!-- Rendered dynamically by app.js -->
         </div>
         <div class="tool-group" aria-label="分類與素材庫工具">
-        <button type="button" class="btn-hdr-toggle" id="btnCategoryDefaults" title="依分類一次重新排列所有欄位">⚙️ 依分類排序</button>
         <div class="menu-wrap">
           <button type="button" class="btn-hdr-toggle menu-trigger" id="btnLibraryMenu" aria-haspopup="true" aria-expanded="false" title="共用素材庫：改一次，所有設定檔一起更新">🔗 素材庫 ▾</button>
           <div class="menu-panel align-right" id="libraryMenu" role="menu">
@@ -148,27 +147,6 @@
             <button type="button" class="menu-item" id="btnBatchAddFromLibrary" role="menuitem">📦 批次加入主題<small>勾選多個素材，一次新增成欄位</small></button>
           </div>
         </div>
-        </div>
-      </div>
-
-      <!-- Category Default Priority management panel -->
-      <div class="modal-overlay" id="categoryDefaultsModal">
-        <div class="modal-content glass">
-          <div class="modal-header">
-            <h3>依分類排序</h3>
-            <button class="modal-close" id="categoryDefaultsCloseX">&times;</button>
-          </div>
-          <div class="modal-body">
-            <p class="category-defaults-hint">欄位的先後就是生成的先後。想依分類整理時，先在下面調整每個分類的數字（大的排前面），再按「依分類重新排序」，只會排這一次，之後仍可自由拖曳。<br>✏️ 改名會同步更新所有使用中的欄位；🗑️ 只會從預設清單移除，不會動到現有欄位。</p>
-            <div class="category-defaults-list" id="categoryDefaultsList">
-              <!-- Rendered dynamically by app.js -->
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" id="btnAddPresetCategory">＋ 新增預設分類</button>
-            <button class="btn btn-secondary" id="categoryDefaultsCloseBtn">關閉</button>
-            <button class="btn btn-primary" id="btnSortByCategory">↕️ 依分類重新排序</button>
-          </div>
         </div>
       </div>
 
@@ -221,14 +199,17 @@
             <button class="modal-close" id="libraryManagerCloseX">&times;</button>
           </div>
           <div class="modal-body">
-            <p class="category-defaults-hint">素材庫是所有設定檔共用的內容：在這裡改一次（例如 Nike 球鞋從 100 款補到 500 款），所有連結它的設定檔都會一起更新。每一項會顯示目前用在哪裡。</p>
+            <p class="category-defaults-hint">素材庫是所有設定檔共用的內容：在這裡改一次（例如 Nike 球鞋從 100 款補到 500 款），所有連結它的設定檔都會一起更新。<strong>分類也在這裡管理</strong>：連結素材的欄位會自動使用素材的分類。分類右邊可以 ✏️ 改名、📑 複製、🗑️ 刪除。</p>
             <input type="text" id="libraryManagerSearch" class="modal-input" placeholder="輸入關鍵字搜尋...">
             <div class="library-manager-list" id="libraryManagerList">
               <!-- Rendered dynamically by app.js -->
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-primary" id="btnAddLibraryItem">＋ 新增素材</button>
+            <div class="library-footer-actions">
+              <button class="btn btn-primary" id="btnAddLibraryItem">＋ 新增素材</button>
+              <button class="btn btn-secondary" id="btnAddLibraryCategory">＋ 新增分類</button>
+            </div>
             <button class="btn btn-secondary" id="libraryManagerCloseBtn">關閉</button>
           </div>
         </div>
@@ -353,6 +334,6 @@
   <!-- Shared popover for per-column "⋯" menus -->
   <div class="menu-panel card-menu-portal" id="cardMenuPortal" role="menu"></div>
 
-  <script src="app.js?v=20261003"></script>
+  <script src="app.js?v=20261003b"></script>
 </body>
 </html>
