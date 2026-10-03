@@ -3151,3 +3151,25 @@ select.col-category-linked option {
 .col-library-badge.clickable:hover {
   filter: brightness(1.2);
 }
+
+/* Library picker: the item this column is linked to right now */
+.library-picker-row.current {
+  border-color: rgba(67, 233, 123, 0.45);
+  background: rgba(67, 233, 123, 0.06);
+}
+
+.library-picker-row.current .btn:disabled {
+  background: rgba(67, 233, 123, 0.15);
+  color: #43e97b;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+#libraryPickerEditCurrent[hidden] {
+  display: none;
+}
+
+#libraryPickerModal .modal-footer {
+  justify-content: space-between;
+}

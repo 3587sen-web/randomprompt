@@ -1406,9 +1406,12 @@ function countLines(content) {
 // The column keeps its own text in col.content as a backup, so nothing is lost
 // if it is unlinked later or the block gets deleted.
 function linkColumnToBlock(col, block) {
-  col.content = getColumnEffectiveContent(col);
+  const switching = isColumnLinked(col);
+  if (!switching) col.content = getColumnEffectiveContent(col); // backup of the column's own text
   col.linkedBlockId = block.id;
-  if (!block.category && col.category) {
+  if (switching) {
+    col.category = block.category || "";
+  } else if (!block.category && col.category) {
     block.category = col.category; // first link teaches an uncategorized item its category
     saveLibraryToStorage();
   } else {
@@ -1955,6 +1958,21 @@ let libraryPickerTargetCol = null;
 
 function openLibraryPicker(col, card) {
   libraryPickerTargetCol = col;
+  const current = isColumnLinked(col) ? library[col.linkedBlockId] : null;
+  document.getElementById("libraryPickerTitle").textContent = current
+    ? `更換素材（目前：${current.title}）`
+    : "選擇要連結的素材庫項目";
+  const editBtn = document.getElementById("libraryPickerEditCurrent");
+  editBtn.hidden = !current;
+  editBtn.textContent = current ? `📚 編輯「${current.title}」` : "";
+  editBtn.onclick = current ? () => {
+    // Close only the picker: closeAllOverlayModals() would also hide the
+    // library panel we're about to open (its hide runs on a delay)
+    const picker = elements.libraryPickerModal;
+    picker.classList.remove("active");
+    setTimeout(() => { picker.style.display = "none"; }, 250);
+    openLibraryManagerAt(current);
+  } : null;
   if (elements.libraryPickerSearch) elements.libraryPickerSearch.value = "";
   renderLibraryPickerList("");
   elements.libraryPickerModal.style.display = "flex";
@@ -2043,12 +2061,22 @@ function renderLibraryPickerList(query) {
       const selectBtn = document.createElement("button");
       selectBtn.type = "button";
       selectBtn.className = "btn btn-primary btn-sm";
-      selectBtn.textContent = "連結這一項";
+      const target = libraryPickerTargetCol;
+      const currentId = target && isColumnLinked(target) ? target.linkedBlockId : null;
+      if (block.id === currentId) {
+        row.classList.add("current");
+        selectBtn.textContent = "✓ 目前連結";
+        selectBtn.disabled = true;
+      } else {
+        selectBtn.textContent = currentId ? "換成這一項" : "連結這一項";
+      }
       selectBtn.addEventListener("click", async () => {
         const col = libraryPickerTargetCol;
         if (!col) return;
+        const fromBlock = isColumnLinked(col) ? library[col.linkedBlockId] : null;
         const own = normalizeContent(getColumnEffectiveContent(col));
-        if (own && own !== normalizeContent(block.content)) {
+        // Switching between library items loses nothing, so no warning then
+        if (!fromBlock && own && own !== normalizeContent(block.content)) {
           const ok = await showCustomConfirm(
             "內容不一樣",
             `這一欄目前有 ${countLines(own)} 行，素材「${block.title}」有 ${countLines(block.content)} 行，內容不同。\n連結後會改用素材庫的內容；這一欄原本的內容會保留成備份，之後「解除連結」時可以選擇還原。`
@@ -2060,7 +2088,12 @@ function renderLibraryPickerList(query) {
         closeAllOverlayModals();
         renderAll();
         autoGenerate();
-        showToast(`🔗 已將欄位連結到素材庫項目「${block.title}」`, "success");
+        showToast(
+          fromBlock
+            ? `🔗 已把這一欄從「${fromBlock.title}」換成「${block.title}」`
+            : `🔗 已將欄位連結到素材庫項目「${block.title}」`,
+          "success"
+        );
       });
 
       row.appendChild(info);
@@ -4102,10 +4135,11 @@ function renderColumnsGrid() {
     const linkBadge = document.createElement("span");
     linkBadge.className = "col-library-badge";
     linkBadge.textContent = isColumnLinked(col) ? `🔗 素材庫：${library[col.linkedBlockId].title}` : "🔗 已連結素材庫";
-    linkBadge.title = "此欄位內容來自共用素材庫，編輯內容會同步影響所有使用此素材的欄位。點一下打開素材庫";
+    linkBadge.title = "此欄位內容來自共用素材庫。點一下可以換成其他素材，或打開素材庫編輯";
     if (isColumnLinked(col)) {
+      linkBadge.textContent += " ⇄";
       linkBadge.classList.add("clickable");
-      linkBadge.addEventListener("click", () => openLibraryManagerAt(library[col.linkedBlockId]));
+      linkBadge.addEventListener("click", () => openLibraryPicker(col, card));
     }
 
     const unlinkColumn = async () => {
@@ -4183,6 +4217,7 @@ function renderColumnsGrid() {
       items.push({ label: "＋ 在後方插入新欄位", onClick: () => insertColumnAfter(state.columns.indexOf(col)) });
       items.push({ divider: "素材庫" });
       if (isColumnLinked(col)) {
+        items.push({ label: "⇄ 換成其他素材…", hint: `目前：${library[col.linkedBlockId].title}`, onClick: () => openLibraryPicker(col, card) });
         items.push({ label: "🔓 解除素材庫連結", hint: "內容留在這一欄，不再同步", onClick: unlinkColumn });
       } else {
         items.push({ label: "🔗 連結素材庫…", hint: "內容改用素材庫項目，會即時同步", onClick: () => openLibraryPicker(col, card) });
