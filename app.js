@@ -3854,15 +3854,48 @@ function renderColumnsGrid() {
     });
 
     if (isColumnLinked(col)) {
-      // Category comes from the library item — show it, click to change it there
+      // Category belongs to the library item: picking one here writes it back
+      // to the item, so every column/preset linked to it follows.
       const block = library[col.linkedBlockId];
-      const catBtn = document.createElement("button");
-      catBtn.type = "button";
-      catBtn.className = "col-category-linked";
-      catBtn.textContent = `🔗 ${block.category || "未分類"}`;
-      catBtn.title = `分類跟著素材「${block.title}」走。點一下到素材庫修改`;
-      catBtn.addEventListener("click", () => openLibraryManagerAt(block));
-      metaRow.appendChild(catBtn);
+      const catSelect = document.createElement("select");
+      catSelect.className = "col-category-linked";
+      const usage = getLibraryUsage()[block.id];
+      catSelect.title = `分類存在素材「${block.title}」上（${describeUsage(usage)}）。在這裡改，所有連到它的欄位一起改`;
+      const addOpt = (value, label) => {
+        const o = document.createElement("option");
+        o.value = value;
+        o.textContent = label;
+        catSelect.appendChild(o);
+      };
+      addOpt("", "🔗 未分類");
+      getLibraryCategoryOptions().forEach(cat => addOpt(cat, `🔗 ${cat}`));
+      addOpt("__new__", "＋ 新增分類...");
+      catSelect.value = block.category || "";
+      catSelect.addEventListener("change", async () => {
+        const fromCat = block.category || "";
+        let newCat = catSelect.value;
+        if (newCat === "__new__") {
+          const name = await showCustomPrompt("新增分類", `為素材「${block.title}」新增分類：`, "");
+          if (name === null || name.trim() === "") {
+            catSelect.value = fromCat;
+            return;
+          }
+          newCat = name.trim();
+        }
+        if (newCat === fromCat) return;
+        block.category = newCat;
+        if (newCat) addLibraryCategory(newCat);
+        saveLibraryToStorage();
+        syncLinkedColumnCategories(true);
+        renderAll();
+        autoGenerate();
+        const others = (usage ? usage.workspace - 1 : 0) + (usage ? usage.presets.length : 0);
+        showToast(
+          `🔗 素材「${block.title}」改到「${newCat || "未分類"}」` + (others > 0 ? `，連到它的其他欄位／設定檔也一起改了` : ""),
+          "success"
+        );
+      });
+      metaRow.appendChild(catSelect);
     } else {
       metaRow.appendChild(categoryInput);
     }
@@ -4069,7 +4102,11 @@ function renderColumnsGrid() {
     const linkBadge = document.createElement("span");
     linkBadge.className = "col-library-badge";
     linkBadge.textContent = isColumnLinked(col) ? `🔗 素材庫：${library[col.linkedBlockId].title}` : "🔗 已連結素材庫";
-    linkBadge.title = "此欄位內容來自共用素材庫，編輯內容會同步影響所有使用此素材的欄位";
+    linkBadge.title = "此欄位內容來自共用素材庫，編輯內容會同步影響所有使用此素材的欄位。點一下打開素材庫";
+    if (isColumnLinked(col)) {
+      linkBadge.classList.add("clickable");
+      linkBadge.addEventListener("click", () => openLibraryManagerAt(library[col.linkedBlockId]));
+    }
 
     const unlinkColumn = async () => {
       const confirmed = await showCustomConfirm(
